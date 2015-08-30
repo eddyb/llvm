@@ -437,7 +437,7 @@ std::string CppWriter::getCppName(const Value* val) {
 
   if (const GlobalVariable* GV = dyn_cast<GlobalVariable>(val)) {
     name = std::string("gvar_") +
-      getTypePrefix(GV->getType()->getElementType());
+      getTypePrefix(GV->getType()->getPointerElementType());
   } else if (isa<Function>(val)) {
     name = std::string("func_");
   } else if (const Constant* C = dyn_cast<Constant>(val)) {
@@ -654,7 +654,7 @@ void CppWriter::printType(Type* Ty) {
   }
   case Type::PointerTyID: {
     PointerType* PT = cast<PointerType>(Ty);
-    Type* ET = PT->getElementType();
+    Type* ET = PT->getPointerElementType();
     printType(ET);
     if (DefinedTypes.find(Ty) == DefinedTypes.end()) {
       std::string elemName(getCppName(ET));
@@ -997,13 +997,13 @@ void CppWriter::printVariableHead(const GlobalVariable *GV) {
   if (is_inline) {
     Out << " = mod->getGlobalVariable(mod->getContext(), ";
     printEscapedString(GV->getName());
-    Out << ", " << getCppName(GV->getType()->getElementType()) << ",true)";
+    Out << ", " << getCppName(GV->getType()->getPointerElementType()) << ",true)";
     nl(Out) << "if (!" << getCppName(GV) << ") {";
     in(); nl(Out) << getCppName(GV);
   }
   Out << " = new GlobalVariable(/*Module=*/*mod, ";
   nl(Out) << "/*Type=*/";
-  printCppName(GV->getType()->getElementType());
+  printCppName(GV->getType()->getPointerElementType());
   Out << ",";
   nl(Out) << "/*isConstant=*/" << (GV->isConstant()?"true":"false");
   Out << ",";

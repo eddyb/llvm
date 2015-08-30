@@ -440,7 +440,7 @@ bool ThreadSanitizer::instrumentLoadOrStore(Instruction *I,
   const unsigned Alignment = IsWrite
       ? cast<StoreInst>(I)->getAlignment()
       : cast<LoadInst>(I)->getAlignment();
-  Type *OrigTy = cast<PointerType>(Addr->getType())->getElementType();
+  Type *OrigTy = cast<PointerType>(Addr->getType())->getPointerElementType();
   const uint32_t TypeSize = DL.getTypeStoreSizeInBits(OrigTy);
   Value *OnAccessFunc = nullptr;
   if (Alignment == 0 || Alignment >= 8 || (Alignment % (TypeSize / 8)) == 0)
@@ -586,7 +586,7 @@ bool ThreadSanitizer::instrumentAtomic(Instruction *I, const DataLayout &DL) {
 int ThreadSanitizer::getMemoryAccessFuncIndex(Value *Addr,
                                               const DataLayout &DL) {
   Type *OrigPtrTy = Addr->getType();
-  Type *OrigTy = cast<PointerType>(OrigPtrTy)->getElementType();
+  Type *OrigTy = cast<PointerType>(OrigPtrTy)->getPointerElementType();
   assert(OrigTy->isSized());
   uint32_t TypeSize = DL.getTypeStoreSizeInBits(OrigTy);
   if (TypeSize != 8  && TypeSize != 16 &&

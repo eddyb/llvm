@@ -931,7 +931,7 @@ Instruction *InstCombiner::FoldOpIntoPhi(Instruction &I) {
 /// element type, otherwise return null.
 Type *InstCombiner::FindElementAtOffset(PointerType *PtrTy, int64_t Offset,
                                         SmallVectorImpl<Value *> &NewIndices) {
-  Type *Ty = PtrTy->getElementType();
+  Type *Ty = PtrTy->getPointerElementType();
   if (!Ty->isSized())
     return nullptr;
 
@@ -1348,10 +1348,15 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
   gep_type_iterator GTI = gep_type_begin(GEP);
   for (User::op_iterator I = GEP.op_begin() + 1, E = GEP.op_end(); I != E;
        ++I, ++GTI) {
-    // Skip indices into struct types.
-    SequentialType *SeqTy = dyn_cast<SequentialType>(*GTI);
-    if (!SeqTy)
+    Type *EltTy;
+    if (auto *SeqTy = dyn_cast<SequentialType>(*GTI)) {
+      EltTy = SeqTy->getElementType();
+    } else if (auto *PtrTy = dyn_cast<PointerType>(*GTI)) {
+      EltTy = PtrTy->getPointerElementType();
+    } else {
+      // Skip indices into struct types.
       continue;
+    }
 
     // Index type should have the same width as IntPtr
     Type *IndexTy = (*I)->getType();
@@ -1360,8 +1365,7 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
  
     // If the element type has zero size then any index over it is equivalent
     // to an index of zero, so replace it with zero if it is not zero already.
-    if (SeqTy->getElementType()->isSized() &&
-        DL.getTypeAllocSize(SeqTy->getElementType()) == 0)
+    if (EltTy->isSized() && DL.getTypeAllocSize(EltTy) == 0)
       if (!isa<Constant>(*I) || !cast<Constant>(*I)->isNullValue()) {
         *I = Constant::getNullValue(NewIndexType);
         MadeChange = true;
@@ -1438,6 +1442,8 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
         if (J > 0) {
           if (CompositeType *CT = dyn_cast<CompositeType>(CurTy)) {
             CurTy = CT->getTypeAtIndex(Op1->getOperand(J));
+          } else if (auto *PtrTy = dyn_cast<PointerType>(CurTy)) {
+            CurTy = PtrTy->getPointerElementType();
           } else {
             CurTy = nullptr;
           }
@@ -1565,8 +1571,13 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
     unsigned AS = GEP.getPointerAddressSpace();
     if (GEP.getOperand(1)->getType()->getScalarSizeInBits() ==
         DL.getPointerSizeInBits(AS)) {
-      Type *PtrTy = GEP.getPointerOperandType();
-      Type *Ty = PtrTy->getPointerElementType();
+      Type *OperandTy = GEP.getPointerOperandType();
+      Type *Ty;
+      if (auto *PtrTy = dyn_cast<PointerType>(OperandTy)) {
+        Ty = PtrTy->getPointerElementType();
+      } else {
+        Ty = cast<SequentialType>(OperandTy)->getElementType();
+      }
       uint64_t TyAllocSize = DL.getTypeAllocSize(Ty);
 
       bool Matched = false;
@@ -1631,13 +1642,13 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
     if (HasZeroPointerIndex) {
       PointerType *CPTy = cast<PointerType>(PtrOp->getType());
       if (ArrayType *CATy =
-          dyn_cast<ArrayType>(CPTy->getElementType())) {
+          dyn_cast<ArrayType>(CPTy->getPointerElementType())) {
         // GEP (bitcast i8* X to [0 x i8]*), i32 0, ... ?
-        if (CATy->getElementType() == StrippedPtrTy->getElementType()) {
+        if (CATy->getElementType() == StrippedPtrTy->getPointerElementType()) {
           // -> GEP i8* X, ...
           SmallVector<Value*, 8> Idx(GEP.idx_begin()+1, GEP.idx_end());
           GetElementPtrInst *Res = GetElementPtrInst::Create(
-              StrippedPtrTy->getElementType(), StrippedPtr, Idx, GEP.getName());
+              StrippedPtrTy->getPointerElementType(), StrippedPtr, Idx, GEP.getName());
           Res->setIsInBounds(GEP.isInBounds());
           if (StrippedPtrTy->getAddressSpace() == GEP.getAddressSpace())
             return Res;
@@ -1651,7 +1662,7 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
         }
 
         if (ArrayType *XATy =
-              dyn_cast<ArrayType>(StrippedPtrTy->getElementType())){
+              dyn_cast<ArrayType>(StrippedPtrTy->getPointerElementType())){
           // GEP (bitcast [10 x i8]* X to [0 x i8]*), i32 0, ... ?
           if (CATy->getElementType() == XATy->getElementType()) {
             // -> GEP [10 x i8]* X, i32 0, ...
@@ -1687,8 +1698,8 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
       // Transform things like:
       // %t = getelementptr i32* bitcast ([2 x i32]* %str to i32*), i32 %V
       // into:  %t1 = getelementptr [2 x i32]* %str, i32 0, i32 %V; bitcast
-      Type *SrcElTy = StrippedPtrTy->getElementType();
-      Type *ResElTy = PtrOp->getType()->getPointerElementType();
+      Type *SrcElTy = StrippedPtrTy->getPointerElementType();
+      Type *ResElTy = cast<PointerType>(PtrOp->getType())->getPointerElementType();
       if (SrcElTy->isArrayTy() &&
           DL.getTypeAllocSize(SrcElTy->getArrayElementType()) ==
               DL.getTypeAllocSize(ResElTy)) {

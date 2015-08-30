@@ -1342,7 +1342,7 @@ static void computeKnownBitsFromOperator(Operator *I, APInt &KnownZero,
     AllocaInst *AI = cast<AllocaInst>(I);
     unsigned Align = AI->getAlignment();
     if (Align == 0)
-      Align = Q.DL.getABITypeAlignment(AI->getType()->getElementType());
+      Align = Q.DL.getABITypeAlignment(AI->getType()->getPointerElementType());
 
     if (Align > 0)
       KnownZero = APInt::getLowBitsSet(BitWidth, countTrailingZeros(Align));
@@ -1577,7 +1577,7 @@ static unsigned getAlignment(const Value *V, const DataLayout &DL) {
 
     if (!Align && A->hasStructRetAttr()) {
       // An sret parameter has at least the ABI alignment of the return type.
-      Type *EltTy = cast<PointerType>(A->getType())->getElementType();
+      Type *EltTy = cast<PointerType>(A->getType())->getPointerElementType();
       if (EltTy->isSized())
         Align = DL.getABITypeAlignment(EltTy);
     }
@@ -2887,7 +2887,7 @@ bool llvm::getConstantStringInfo(const Value *V, StringRef &Str,
 
     // Make sure the index-ee is a pointer to array of i8.
     PointerType *PT = cast<PointerType>(GEP->getOperand(0)->getType());
-    ArrayType *AT = dyn_cast<ArrayType>(PT->getElementType());
+    ArrayType *AT = dyn_cast<ArrayType>(PT->getPointerElementType());
     if (!AT || !AT->getElementType()->isIntegerTy(8))
       return false;
 
@@ -3176,7 +3176,7 @@ static bool isDereferenceableFromAttribute(const Value *V, const DataLayout &DL,
                                            const DominatorTree *DT,
                                            const TargetLibraryInfo *TLI) {
   Type *VTy = V->getType();
-  Type *Ty = VTy->getPointerElementType();
+  Type *Ty = cast<PointerType>(VTy)->getPointerElementType();
   if (!Ty->isSized())
     return false;
   
@@ -3189,7 +3189,7 @@ static bool isAligned(const Value *Base, APInt Offset, unsigned Align,
   APInt BaseAlign(Offset.getBitWidth(), getAlignment(Base, DL));
 
   if (!BaseAlign) {
-    Type *Ty = Base->getType()->getPointerElementType();
+    Type *Ty = cast<PointerType>(Base->getType())->getPointerElementType();
     if (!Ty->isSized())
       return false;
     BaseAlign = DL.getABITypeAlignment(Ty);
@@ -3229,8 +3229,8 @@ static bool isDereferenceableAndAlignedPointer(
   // is at least as large as for the resulting pointer type, then
   // we can look through the bitcast.
   if (const BitCastOperator *BC = dyn_cast<BitCastOperator>(V)) {
-    Type *STy = BC->getSrcTy()->getPointerElementType(),
-         *DTy = BC->getDestTy()->getPointerElementType();
+    Type *STy = cast<PointerType>(BC->getSrcTy())->getPointerElementType(),
+         *DTy = cast<PointerType>(BC->getDestTy())->getPointerElementType();
     if (STy->isSized() && DTy->isSized() &&
         (DL.getTypeStoreSize(STy) >= DL.getTypeStoreSize(DTy)) &&
         (DL.getABITypeAlignment(STy) >= DL.getABITypeAlignment(DTy)))
@@ -3254,7 +3254,7 @@ static bool isDereferenceableAndAlignedPointer(
   // For GEPs, determine if the indexing lands within the allocated object.
   if (const GEPOperator *GEP = dyn_cast<GEPOperator>(V)) {
     Type *VTy = GEP->getType();
-    Type *Ty = VTy->getPointerElementType();
+    Type *Ty = cast<PointerType>(VTy)->getPointerElementType();
     const Value *Base = GEP->getPointerOperand();
 
     // Conservatively require that the base pointer be fully dereferenceable
@@ -3272,7 +3272,7 @@ static bool isDereferenceableAndAlignedPointer(
     // Check if the load is within the bounds of the underlying object
     // and offset is aligned.
     uint64_t LoadSize = DL.getTypeStoreSize(Ty);
-    Type *BaseType = Base->getType()->getPointerElementType();
+    Type *BaseType = cast<PointerType>(Base->getType())->getPointerElementType();
     assert(isPowerOf2_32(Align) && "must be a power of 2!");
     return (Offset + LoadSize).ule(DL.getTypeAllocSize(BaseType)) && 
            !(Offset & APInt(Offset.getBitWidth(), Align-1));
@@ -3301,7 +3301,7 @@ bool llvm::isDereferenceableAndAlignedPointer(const Value *V, unsigned Align,
   // determine the exact offset to the attributed variable, we can use that
   // information here.
   Type *VTy = V->getType();
-  Type *Ty = VTy->getPointerElementType();
+  Type *Ty = cast<PointerType>(VTy)->getPointerElementType();
 
   // Require ABI alignment for loads without alignment specification
   if (Align == 0)

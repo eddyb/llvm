@@ -133,7 +133,7 @@ static bool isEliminableAddrSpaceCast(Value *V) {
   // the address space but not the type. If the type also changes, we could
   // still get rid of the addrspacecast by adding an extra bitcast, but we
   // rarely see such scenarios.
-  if (SrcTy->getElementType() != DestTy->getElementType())
+  if (SrcTy->getPointerElementType() != DestTy->getPointerElementType())
     return false;
 
   // Checks whether the addrspacecast is from a non-generic address space to the
@@ -197,7 +197,7 @@ Value *NVPTXFavorNonGenericAddrSpaces::hoistAddrSpaceCastFromBitCast(
   // BC'   = addrspacecast Cast'
   Value *Src = Cast->getOperand(0);
   Type *TypeOfNewCast =
-      PointerType::get(BC->getType()->getPointerElementType(),
+      PointerType::get(cast<PointerType>(BC->getType())->getPointerElementType(),
                        Src->getType()->getPointerAddressSpace());
   Value *NewBC;
   if (BitCastInst *BCI = dyn_cast<BitCastInst>(BC)) {

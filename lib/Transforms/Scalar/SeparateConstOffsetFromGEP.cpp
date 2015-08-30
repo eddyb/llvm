@@ -722,7 +722,7 @@ bool SeparateConstOffsetFromGEP::canonicalizeArrayIndicesToPointerSize(
   for (User::op_iterator I = GEP->op_begin() + 1, E = GEP->op_end();
        I != E; ++I, ++GTI) {
     // Skip struct member indices which must be i32.
-    if (isa<SequentialType>(*GTI)) {
+    if (isa<SequentialType>(*GTI) || isa<PointerType>(*GTI)) {
       if ((*I)->getType() != IntPtrTy) {
         *I = CastInst::CreateIntegerCast(*I, IntPtrTy, true, "idxprom", GEP);
         Changed = true;
@@ -739,7 +739,17 @@ SeparateConstOffsetFromGEP::accumulateByteOffset(GetElementPtrInst *GEP,
   int64_t AccumulativeByteOffset = 0;
   gep_type_iterator GTI = gep_type_begin(*GEP);
   for (unsigned I = 1, E = GEP->getNumOperands(); I != E; ++I, ++GTI) {
-    if (isa<SequentialType>(*GTI)) {
+    if (StructType *StTy = dyn_cast<StructType>(*GTI)) {
+      if (LowerGEP) {
+        uint64_t Field = cast<ConstantInt>(GEP->getOperand(I))->getZExtValue();
+        // Skip field 0 as the offset is always 0.
+        if (Field != 0) {
+          NeedsExtraction = true;
+          AccumulativeByteOffset +=
+              DL->getStructLayout(StTy)->getElementOffset(Field);
+        }
+      }
+    } else {
       // Tries to extract a constant offset from this GEP index.
       int64_t ConstantOffset =
           ConstantOffsetExtractor::Find(GEP->getOperand(I), GEP, DT);
@@ -750,15 +760,6 @@ SeparateConstOffsetFromGEP::accumulateByteOffset(GetElementPtrInst *GEP,
         // the original GEP with this byte offset.
         AccumulativeByteOffset +=
             ConstantOffset * DL->getTypeAllocSize(GTI.getIndexedType());
-      }
-    } else if (LowerGEP) {
-      StructType *StTy = cast<StructType>(*GTI);
-      uint64_t Field = cast<ConstantInt>(GEP->getOperand(I))->getZExtValue();
-      // Skip field 0 as the offset is always 0.
-      if (Field != 0) {
-        NeedsExtraction = true;
-        AccumulativeByteOffset +=
-            DL->getStructLayout(StTy)->getElementOffset(Field);
       }
     }
   }
@@ -787,7 +788,7 @@ void SeparateConstOffsetFromGEP::lowerToSingleIndexGEPs(
   // Create an ugly GEP for each sequential index. We don't create GEPs for
   // structure indices, as they are accumulated in the constant offset index.
   for (unsigned I = 1, E = Variadic->getNumOperands(); I != E; ++I, ++GTI) {
-    if (isa<SequentialType>(*GTI)) {
+    if (isa<SequentialType>(*GTI) || isa<PointerType>(*GTI)) {
       Value *Idx = Variadic->getOperand(I);
       // Skip zero indices.
       if (ConstantInt *CI = dyn_cast<ConstantInt>(Idx))
@@ -848,7 +849,7 @@ SeparateConstOffsetFromGEP::lowerToArithmetics(GetElementPtrInst *Variadic,
   // don't create arithmetics for structure indices, as they are accumulated
   // in the constant offset index.
   for (unsigned I = 1, E = Variadic->getNumOperands(); I != E; ++I, ++GTI) {
-    if (isa<SequentialType>(*GTI)) {
+    if (isa<SequentialType>(*GTI) || isa<PointerType>(*GTI)) {
       Value *Idx = Variadic->getOperand(I);
       // Skip zero indices.
       if (ConstantInt *CI = dyn_cast<ConstantInt>(Idx))
@@ -911,7 +912,7 @@ bool SeparateConstOffsetFromGEP::splitGEP(GetElementPtrInst *GEP) {
         getAnalysis<TargetTransformInfoWrapperPass>().getTTI(
             *GEP->getParent()->getParent());
     unsigned AddrSpace = GEP->getPointerAddressSpace();
-    if (!TTI.isLegalAddressingMode(GEP->getType()->getElementType(),
+    if (!TTI.isLegalAddressingMode(cast<PointerType>(GEP->getType())->getPointerElementType(),
                                    /*BaseGV=*/nullptr, AccumulativeByteOffset,
                                    /*HasBaseReg=*/true, /*Scale=*/0,
                                    AddrSpace)) {
@@ -928,7 +929,7 @@ bool SeparateConstOffsetFromGEP::splitGEP(GetElementPtrInst *GEP) {
   // handle the constant offset and won't need a new structure index.
   gep_type_iterator GTI = gep_type_begin(*GEP);
   for (unsigned I = 1, E = GEP->getNumOperands(); I != E; ++I, ++GTI) {
-    if (isa<SequentialType>(*GTI)) {
+    if (isa<SequentialType>(*GTI) || isa<PointerType>(*GTI)) {
       // Splits this GEP index into a variadic part and a constant offset, and
       // uses the variadic part as the new index.
       Value *OldIdx = GEP->getOperand(I);
@@ -1018,7 +1019,7 @@ bool SeparateConstOffsetFromGEP::splitGEP(GetElementPtrInst *GEP) {
   // unsigned.. Therefore, we cast ElementTypeSizeOfGEP to signed because it is
   // used with unsigned integers later.
   int64_t ElementTypeSizeOfGEP = static_cast<int64_t>(
-      DL->getTypeAllocSize(GEP->getType()->getElementType()));
+      DL->getTypeAllocSize(cast<PointerType>(GEP->getType())->getPointerElementType()));
   Type *IntPtrTy = DL->getIntPtrType(GEP->getType());
   if (AccumulativeByteOffset % ElementTypeSizeOfGEP == 0) {
     // Very likely. As long as %gep is natually aligned, the byte offset we

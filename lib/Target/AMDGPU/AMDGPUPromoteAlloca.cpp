@@ -88,7 +88,7 @@ bool AMDGPUPromoteAlloca::runOnFunction(Function &F) {
           continue;
         if (Use->getParent()->getParent() == &F)
           LocalMemAvailable -=
-              Mod->getDataLayout().getTypeAllocSize(GVTy->getElementType());
+              Mod->getDataLayout().getTypeAllocSize(GVTy->getPointerElementType());
       }
     }
   }
@@ -360,7 +360,7 @@ void AMDGPUPromoteAlloca::visitAlloca(AllocaInst &I) {
     Value *V = *i;
     CallInst *Call = dyn_cast<CallInst>(V);
     if (!Call) {
-      Type *EltTy = V->getType()->getPointerElementType();
+      Type *EltTy = cast<PointerType>(V->getType())->getPointerElementType();
       PointerType *NewTy = PointerType::get(EltTy, AMDGPUAS::LOCAL_ADDRESS);
 
       // The operand's value should be corrected on its own.

@@ -96,7 +96,7 @@ static void addByteCountSuffix(raw_ostream &OS, const Function *F,
     Type *Ty = AI->getType();
     // 'Dereference' type in case of byval or inalloca parameter attribute.
     if (AI->hasByValOrInAllocaAttr())
-      Ty = cast<PointerType>(Ty)->getElementType();
+      Ty = cast<PointerType>(Ty)->getPointerElementType();
     // Size should be aligned to pointer size.
     unsigned PtrSize = DL.getPointerSize();
     ArgWords += alignTo(DL.getTypeAllocSize(Ty), PtrSize);

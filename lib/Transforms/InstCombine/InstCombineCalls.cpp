@@ -106,7 +106,7 @@ Instruction *InstCombiner::SimplifyMemTransfer(MemIntrinsic *MI) {
   MDNode *CopyMD = nullptr;
   if (StrippedDest != MI->getArgOperand(0)) {
     Type *SrcETy = cast<PointerType>(StrippedDest->getType())
-                                    ->getElementType();
+                                    ->getPointerElementType();
     if (SrcETy->isSized() && DL.getTypeStoreSize(SrcETy) == Size) {
       // The SrcETy might be something like {{{double}}} or [1 x double].  Rip
       // down through these levels if so.
@@ -1824,8 +1824,8 @@ static bool isSafeToEliminateVarargsCast(const CallSite CS,
     return true;
 
   Type* SrcTy =
-            cast<PointerType>(CI->getOperand(0)->getType())->getElementType();
-  Type* DstTy = cast<PointerType>(CI->getType())->getElementType();
+            cast<PointerType>(CI->getOperand(0)->getType())->getPointerElementType();
+  Type* DstTy = cast<PointerType>(CI->getType())->getPointerElementType();
   if (!SrcTy->isSized() || !DstTy->isSized())
     return false;
   if (DL.getTypeAllocSize(SrcTy) != DL.getTypeAllocSize(DstTy))
@@ -2020,7 +2020,7 @@ Instruction *InstCombiner::visitCallSite(CallSite CS) {
     return transformCallThroughTrampoline(CS, II);
 
   PointerType *PTy = cast<PointerType>(Callee->getType());
-  FunctionType *FTy = cast<FunctionType>(PTy->getElementType());
+  FunctionType *FTy = cast<FunctionType>(PTy->getPointerElementType());
   if (FTy->isVarArg()) {
     int ix = FTy->getNumParams();
     // See if we can optimize any arguments passed through the varargs area of
@@ -2148,12 +2148,12 @@ bool InstCombiner::transformConstExprCastCall(CallSite CS) {
         CallerPAL.getParamAttributes(i + 1).hasAttribute(i + 1,
                                                          Attribute::ByVal)) {
       PointerType *ParamPTy = dyn_cast<PointerType>(ParamTy);
-      if (!ParamPTy || !ParamPTy->getElementType()->isSized())
+      if (!ParamPTy || !ParamPTy->getPointerElementType()->isSized())
         return false;
 
-      Type *CurElTy = ActTy->getPointerElementType();
+      Type *CurElTy = cast<PointerType>(ActTy)->getPointerElementType();
       if (DL.getTypeAllocSize(CurElTy) !=
-          DL.getTypeAllocSize(ParamPTy->getElementType()))
+          DL.getTypeAllocSize(ParamPTy->getPointerElementType()))
         return false;
     }
   }
@@ -2167,16 +2167,16 @@ bool InstCombiner::transformConstExprCastCall(CallSite CS) {
     // call.  We don't want to introduce a varargs call where one doesn't
     // already exist.
     PointerType *APTy = cast<PointerType>(CS.getCalledValue()->getType());
-    if (FT->isVarArg()!=cast<FunctionType>(APTy->getElementType())->isVarArg())
+    if (FT->isVarArg()!=cast<FunctionType>(APTy->getPointerElementType())->isVarArg())
       return false;
 
     // If both the callee and the cast type are varargs, we still have to make
     // sure the number of fixed parameters are the same or we have the same
     // ABI issues as if we introduce a varargs call.
     if (FT->isVarArg() &&
-        cast<FunctionType>(APTy->getElementType())->isVarArg() &&
+        cast<FunctionType>(APTy->getPointerElementType())->isVarArg() &&
         FT->getNumParams() !=
-        cast<FunctionType>(APTy->getElementType())->getNumParams())
+        cast<FunctionType>(APTy->getPointerElementType())->getNumParams())
       return false;
   }
 
@@ -2339,7 +2339,7 @@ InstCombiner::transformCallThroughTrampoline(CallSite CS,
                                              IntrinsicInst *Tramp) {
   Value *Callee = CS.getCalledValue();
   PointerType *PTy = cast<PointerType>(Callee->getType());
-  FunctionType *FTy = cast<FunctionType>(PTy->getElementType());
+  FunctionType *FTy = cast<FunctionType>(PTy->getPointerElementType());
   const AttributeSet &Attrs = CS.getAttributes();
 
   // If the call already has the 'nest' attribute somewhere then give up -
@@ -2352,7 +2352,7 @@ InstCombiner::transformCallThroughTrampoline(CallSite CS,
 
   Function *NestF =cast<Function>(Tramp->getArgOperand(1)->stripPointerCasts());
   PointerType *NestFPTy = cast<PointerType>(NestF->getType());
-  FunctionType *NestFTy = cast<FunctionType>(NestFPTy->getElementType());
+  FunctionType *NestFTy = cast<FunctionType>(NestFPTy->getPointerElementType());
 
   const AttributeSet &NestAttrs = NestF->getAttributes();
   if (!NestAttrs.isEmpty()) {

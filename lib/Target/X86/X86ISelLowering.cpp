@@ -19416,8 +19416,9 @@ bool X86TargetLowering::shouldExpandAtomicStoreInIR(StoreInst *SI) const {
 TargetLowering::AtomicExpansionKind
 X86TargetLowering::shouldExpandAtomicLoadInIR(LoadInst *LI) const {
   auto PTy = cast<PointerType>(LI->getPointerOperand()->getType());
-  return needsCmpXchgNb(PTy->getElementType()) ? AtomicExpansionKind::CmpXChg
-                                               : AtomicExpansionKind::None;
+  auto ValTy = PTy->getPointerElementType();
+  return needsCmpXchgNb(ValTy) ? AtomicExpansionKind::CmpXChg
+                               : AtomicExpansionKind::None;
 }
 
 TargetLowering::AtomicExpansionKind

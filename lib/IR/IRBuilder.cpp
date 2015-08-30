@@ -45,7 +45,7 @@ Type *IRBuilderBase::getCurrentFunctionReturnType() const {
 
 Value *IRBuilderBase::getCastedInt8PtrValue(Value *Ptr) {
   PointerType *PT = cast<PointerType>(Ptr->getType());
-  if (PT->getElementType()->isIntegerTy(8))
+  if (PT->getPointerElementType()->isIntegerTy(8))
     return Ptr;
   
   // Otherwise, we need to insert a bitcast.
@@ -214,7 +214,7 @@ CallInst *IRBuilderBase::CreateMaskedLoad(Value *Ptr, unsigned Align,
                                           const Twine &Name) {
   assert(Ptr->getType()->isPointerTy() && "Ptr must be of pointer type");
   // DataTy is the overloaded type
-  Type *DataTy = cast<PointerType>(Ptr->getType())->getElementType();
+  Type *DataTy = cast<PointerType>(Ptr->getType())->getPointerElementType();
   assert(DataTy->isVectorTy() && "Ptr should point to a vector");
   if (!PassThru)
     PassThru = UndefValue::get(DataTy);
@@ -277,7 +277,7 @@ static CallInst *CreateGCStatepointCallCommon(
     const Twine &Name) {
   // Extract out the type of the callee.
   PointerType *FuncPtrType = cast<PointerType>(ActualCallee->getType());
-  assert(isa<FunctionType>(FuncPtrType->getElementType()) &&
+  assert(isa<FunctionType>(FuncPtrType->getPointerElementType()) &&
          "actual callee must be a callable value");
 
   Module *M = Builder->GetInsertBlock()->getParent()->getParent();
@@ -328,7 +328,7 @@ static InvokeInst *CreateGCStatepointInvokeCommon(
     ArrayRef<T2> DeoptArgs, ArrayRef<T3> GCArgs, const Twine &Name) {
   // Extract out the type of the callee.
   PointerType *FuncPtrType = cast<PointerType>(ActualInvokee->getType());
-  assert(isa<FunctionType>(FuncPtrType->getElementType()) &&
+  assert(isa<FunctionType>(FuncPtrType->getPointerElementType()) &&
          "actual callee must be a callable value");
 
   Module *M = Builder->GetInsertBlock()->getParent()->getParent();

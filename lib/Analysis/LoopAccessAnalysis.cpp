@@ -826,7 +826,7 @@ int llvm::isStridedPtr(PredicatedScalarEvolution &PSE, Value *Ptr,
 
   // Make sure that the pointer does not point to aggregate types.
   auto *PtrTy = cast<PointerType>(Ty);
-  if (PtrTy->getElementType()->isAggregateType()) {
+  if (PtrTy->getPointerElementType()->isAggregateType()) {
     DEBUG(dbgs() << "LAA: Bad stride - Not a pointer to a scalar type"
           << *Ptr << "\n");
     return 0;
@@ -876,7 +876,7 @@ int llvm::isStridedPtr(PredicatedScalarEvolution &PSE, Value *Ptr,
   }
 
   auto &DL = Lp->getHeader()->getModule()->getDataLayout();
-  int64_t Size = DL.getTypeAllocSize(PtrTy->getElementType());
+  int64_t Size = DL.getTypeAllocSize(PtrTy->getPointerElementType());
   const APInt &APStepVal = C->getAPInt();
 
   // Huge step value - give up.
@@ -1091,8 +1091,8 @@ MemoryDepChecker::isDependent(const MemAccessInfo &A, unsigned AIdx,
     return Dependence::Unknown;
   }
 
-  Type *ATy = APtr->getType()->getPointerElementType();
-  Type *BTy = BPtr->getType()->getPointerElementType();
+  Type *ATy = cast<PointerType>(APtr->getType())->getPointerElementType();
+  Type *BTy = cast<PointerType>(BPtr->getType())->getPointerElementType();
   auto &DL = InnermostLoop->getHeader()->getModule()->getDataLayout();
   unsigned TypeByteSize = DL.getTypeAllocSize(ATy);
 

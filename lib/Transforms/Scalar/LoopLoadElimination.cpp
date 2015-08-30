@@ -64,12 +64,11 @@ struct StoreToLoadForwardingCandidate {
   bool isDependenceDistanceOfOne(PredicatedScalarEvolution &PSE) const {
     Value *LoadPtr = Load->getPointerOperand();
     Value *StorePtr = Store->getPointerOperand();
-    Type *LoadPtrType = LoadPtr->getType();
-    Type *LoadType = LoadPtrType->getPointerElementType();
+    Type *LoadType = Load->getType();
 
-    assert(LoadPtrType->getPointerAddressSpace() ==
+    assert(LoadPtr->getType()->getPointerAddressSpace() ==
                StorePtr->getType()->getPointerAddressSpace() &&
-           LoadType == StorePtr->getType()->getPointerElementType() &&
+           LoadType == Store->getValueOperand()->getType() &&
            "Should be a known dependence");
 
     auto &DL = Load->getParent()->getModule()->getDataLayout();

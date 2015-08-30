@@ -183,8 +183,11 @@ namespace {
   Type *next_type(Type *Ty, Value *Idx) {
     // Advance the type.
     if (!Ty->isStructTy()) {
-      Type *NexTy = cast<SequentialType>(Ty)->getElementType();
-      return NexTy;
+      if (auto *PtrTy = dyn_cast<PointerType>(Ty)) {
+        return PtrTy->getPointerElementType();
+      } else {
+        return cast<SequentialType>(Ty)->getElementType();
+      }
     }
     // Otherwise it is a struct type.
     ConstantInt *CI = dyn_cast<ConstantInt>(Idx);
@@ -358,7 +361,7 @@ void HexagonCommonGEP::processGepInst(GetElementPtrInst *GepI,
   // Skip the first index operand, since we only handle 0. This dereferences
   // the pointer operand.
   GepNode *PN = N;
-  Type *PtrTy = cast<PointerType>(PtrOp->getType())->getElementType();
+  Type *PtrTy = cast<PointerType>(PtrOp->getType())->getPointerElementType();
   for (User::op_iterator OI = GepI->idx_begin()+1, OE = GepI->idx_end();
        OI != OE; ++OI) {
     Value *Op = *OI;
@@ -1119,7 +1122,7 @@ Value *HexagonCommonGEP::fabricateGEP(NodeVect &NA, BasicBlock::iterator At,
     }
     ArrayRef<Value*> A(IdxList, IdxC);
     Type *InpTy = Input->getType();
-    Type *ElTy = cast<PointerType>(InpTy->getScalarType())->getElementType();
+    Type *ElTy = cast<PointerType>(InpTy->getScalarType())->getPointerElementType();
     NewInst = GetElementPtrInst::Create(ElTy, Input, A, "cgep", &*At);
     DEBUG(dbgs() << "new GEP: " << *NewInst << '\n');
     Input = NewInst;

@@ -1030,7 +1030,7 @@ void NVPTXAsmPrinter::printModuleLevelGV(const GlobalVariable *GVar,
 
   // GlobalVariables are always constant pointers themselves.
   PointerType *PTy = GVar->getType();
-  Type *ETy = PTy->getElementType();
+  Type *ETy = PTy->getPointerElementType();
 
   if (GVar->hasExternalLinkage()) {
     if (GVar->hasInitializer())
@@ -1342,7 +1342,7 @@ void NVPTXAsmPrinter::emitPTXGlobalVariable(const GlobalVariable *GVar,
 
   // GlobalVariables are always constant pointers themselves.
   PointerType *PTy = GVar->getType();
-  Type *ETy = PTy->getElementType();
+  Type *ETy = PTy->getPointerElementType();
 
   O << ".";
   emitPTXAddressSpace(PTy->getAddressSpace(), O);
@@ -1497,7 +1497,7 @@ void NVPTXAsmPrinter::emitFunctionParamList(const Function *F, raw_ostream &O) {
 
           if (static_cast<NVPTXTargetMachine &>(TM).getDrvInterface() !=
               NVPTX::CUDA) {
-            Type *ETy = PTy->getElementType();
+            Type *ETy = PTy->getPointerElementType();
             int addrSpace = PTy->getAddressSpace();
             switch (addrSpace) {
             default:
@@ -1552,7 +1552,7 @@ void NVPTXAsmPrinter::emitFunctionParamList(const Function *F, raw_ostream &O) {
     // param has byVal attribute. So should be a pointer
     auto *PTy = dyn_cast<PointerType>(Ty);
     assert(PTy && "Param with byval attribute should be a pointer type");
-    Type *ETy = PTy->getElementType();
+    Type *ETy = PTy->getPointerElementType();
 
     if (isABI || isKernelFunc) {
       // Just print .param .align <a> .b8 .param[size];

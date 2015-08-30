@@ -389,7 +389,7 @@ Value *SCEVExpander::expandAddToGEP(const SCEV *const *op_begin,
                                     PointerType *PTy,
                                     Type *Ty,
                                     Value *V) {
-  Type *OriginalElTy = PTy->getElementType();
+  Type *OriginalElTy = PTy->getPointerElementType();
   Type *ElTy = OriginalElTy;
   SmallVector<Value *, 4> GepIndices;
   SmallVector<const SCEV *, 8> Ops(op_begin, op_end);

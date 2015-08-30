@@ -708,7 +708,7 @@ bool LLParser::ParseAlias(const std::string &Name, LocTy NameLoc, unsigned L,
     return Error(AliaseeLoc, "An alias must have pointer type");
   unsigned AddrSpace = PTy->getAddressSpace();
 
-  if (Ty != PTy->getElementType())
+  if (Ty != PTy->getPointerElementType())
     return Error(
         ExplicitTypeLoc,
         "explicit pointee type doesn't match operand's pointee type");
@@ -1066,10 +1066,10 @@ bool LLParser::ParseFnAttributeValuePairs(AttrBuilder &B,
 
 static inline GlobalValue *createGlobalFwdRef(Module *M, PointerType *PTy,
                                               const std::string &Name) {
-  if (auto *FT = dyn_cast<FunctionType>(PTy->getElementType()))
+  if (auto *FT = dyn_cast<FunctionType>(PTy->getPointerElementType()))
     return Function::Create(FT, GlobalValue::ExternalWeakLinkage, Name, M);
   else
-    return new GlobalVariable(*M, PTy->getElementType(), false,
+    return new GlobalVariable(*M, PTy->getPointerElementType(), false,
                               GlobalValue::ExternalWeakLinkage, nullptr, Name,
                               nullptr, GlobalVariable::NotThreadLocal,
                               PTy->getAddressSpace());
@@ -3004,7 +3004,7 @@ bool LLParser::ParseValID(ValID &ID, PerFunctionState *PFS) {
 
       Type *BaseType = Elts[0]->getType();
       auto *BasePointerType = cast<PointerType>(BaseType->getScalarType());
-      if (Ty != BasePointerType->getElementType())
+      if (Ty != BasePointerType->getPointerElementType())
         return Error(
             ExplicitTypeLoc,
             "explicit pointee type doesn't match operand's pointee type");
@@ -5810,7 +5810,7 @@ int LLParser::ParseLoad(Instruction *&Inst, PerFunctionState &PFS) {
   if (Ordering == Release || Ordering == AcquireRelease)
     return Error(Loc, "atomic load cannot use Release ordering");
 
-  if (Ty != cast<PointerType>(Val->getType())->getElementType())
+  if (Ty != cast<PointerType>(Val->getType())->getPointerElementType())
     return Error(ExplicitTypeLoc,
                  "explicit pointee type doesn't match operand's pointee type");
 
@@ -5853,7 +5853,7 @@ int LLParser::ParseStore(Instruction *&Inst, PerFunctionState &PFS) {
     return Error(PtrLoc, "store operand must be a pointer");
   if (!Val->getType()->isFirstClassType())
     return Error(Loc, "store operand must be a first class value");
-  if (cast<PointerType>(Ptr->getType())->getElementType() != Val->getType())
+  if (cast<PointerType>(Ptr->getType())->getPointerElementType() != Val->getType())
     return Error(Loc, "stored value and pointer type do not match");
   if (isAtomic && !Alignment)
     return Error(Loc, "atomic store must have explicit non-zero alignment");
@@ -5899,9 +5899,9 @@ int LLParser::ParseCmpXchg(Instruction *&Inst, PerFunctionState &PFS) {
     return TokError("cmpxchg failure ordering cannot include release semantics");
   if (!Ptr->getType()->isPointerTy())
     return Error(PtrLoc, "cmpxchg operand must be a pointer");
-  if (cast<PointerType>(Ptr->getType())->getElementType() != Cmp->getType())
+  if (cast<PointerType>(Ptr->getType())->getPointerElementType() != Cmp->getType())
     return Error(CmpLoc, "compare value and pointer type do not match");
-  if (cast<PointerType>(Ptr->getType())->getElementType() != New->getType())
+  if (cast<PointerType>(Ptr->getType())->getPointerElementType() != New->getType())
     return Error(NewLoc, "new value and pointer type do not match");
   if (!New->getType()->isIntegerTy())
     return Error(NewLoc, "cmpxchg operand must be an integer");
@@ -5958,7 +5958,7 @@ int LLParser::ParseAtomicRMW(Instruction *&Inst, PerFunctionState &PFS) {
     return TokError("atomicrmw cannot be unordered");
   if (!Ptr->getType()->isPointerTy())
     return Error(PtrLoc, "atomicrmw operand must be a pointer");
-  if (cast<PointerType>(Ptr->getType())->getElementType() != Val->getType())
+  if (cast<PointerType>(Ptr->getType())->getPointerElementType() != Val->getType())
     return Error(ValLoc, "atomicrmw value and pointer type do not match");
   if (!Val->getType()->isIntegerTy())
     return Error(ValLoc, "atomicrmw operand must be an integer");
@@ -6012,7 +6012,7 @@ int LLParser::ParseGetElementPtr(Instruction *&Inst, PerFunctionState &PFS) {
   if (!BasePointerType)
     return Error(Loc, "base of getelementptr must be a pointer");
 
-  if (Ty != BasePointerType->getElementType())
+  if (Ty != BasePointerType->getPointerElementType())
     return Error(ExplicitTypeLoc,
                  "explicit pointee type doesn't match operand's pointee type");
 

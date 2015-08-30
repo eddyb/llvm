@@ -1114,7 +1114,7 @@ bool llvm::ConvertDebugDeclareToDebugValue(DbgDeclareInst *DDI,
 /// Determine whether this alloca is either a VLA or an array.
 static bool isArray(AllocaInst *AI) {
   return AI->isArrayAllocation() ||
-    AI->getType()->getElementType()->isArrayTy();
+    AI->getType()->getPointerElementType()->isArrayTy();
 }
 
 /// LowerDbgDeclare - Lowers llvm.dbg.declare intrinsics into appropriate set

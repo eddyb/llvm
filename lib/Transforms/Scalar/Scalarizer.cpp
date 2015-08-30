@@ -188,7 +188,7 @@ Scatterer::Scatterer(BasicBlock *bb, BasicBlock::iterator bbi, Value *v,
   Type *Ty = V->getType();
   PtrTy = dyn_cast<PointerType>(Ty);
   if (PtrTy)
-    Ty = PtrTy->getElementType();
+    Ty = PtrTy->getPointerElementType();
   Size = Ty->getVectorNumElements();
   if (!CachePtr)
     Tmp.resize(Size, nullptr);
@@ -208,7 +208,7 @@ Value *Scatterer::operator[](unsigned I) {
   if (PtrTy) {
     if (!CV[0]) {
       Type *Ty =
-        PointerType::get(PtrTy->getElementType()->getVectorElementType(),
+        PointerType::get(PtrTy->getPointerElementType()->getVectorElementType(),
                          PtrTy->getAddressSpace());
       CV[0] = Builder.CreateBitCast(V, Ty, V->getName() + ".i0");
     }

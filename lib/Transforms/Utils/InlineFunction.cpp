@@ -831,7 +831,7 @@ static void UpdateCallGraphAfterInlining(CallSite CS,
 static void HandleByValArgumentInit(Value *Dst, Value *Src, Module *M,
                                     BasicBlock *InsertBlock,
                                     InlineFunctionInfo &IFI) {
-  Type *AggTy = cast<PointerType>(Src->getType())->getElementType();
+  Type *AggTy = cast<PointerType>(Src->getType())->getPointerElementType();
   IRBuilder<> Builder(InsertBlock, InsertBlock->begin());
 
   Value *Size = Builder.getInt64(M->getDataLayout().getTypeStoreSize(AggTy));
@@ -849,7 +849,7 @@ static Value *HandleByValArgument(Value *Arg, Instruction *TheCall,
                                   InlineFunctionInfo &IFI,
                                   unsigned ByValAlignment) {
   PointerType *ArgTy = cast<PointerType>(Arg->getType());
-  Type *AggTy = ArgTy->getElementType();
+  Type *AggTy = ArgTy->getPointerElementType();
 
   Function *Caller = TheCall->getParent()->getParent();
 

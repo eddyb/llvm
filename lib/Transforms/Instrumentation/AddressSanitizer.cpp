@@ -1184,7 +1184,7 @@ void AddressSanitizerModule::createInitializerPoisonCalls(
 }
 
 bool AddressSanitizerModule::ShouldInstrumentGlobal(GlobalVariable *G) {
-  Type *Ty = cast<PointerType>(G->getType())->getElementType();
+  Type *Ty = cast<PointerType>(G->getType())->getPointerElementType();
   DEBUG(dbgs() << "GLOBAL: " << *G << "\n");
 
   if (GlobalsMD.get(G).IsBlacklisted) return false;
@@ -1339,7 +1339,7 @@ bool AddressSanitizerModule::InstrumentGlobals(IRBuilder<> &IRB, Module &M) {
         /*AllowMerging*/ true);
 
     PointerType *PtrTy = cast<PointerType>(G->getType());
-    Type *Ty = PtrTy->getElementType();
+    Type *Ty = PtrTy->getPointerElementType();
     uint64_t SizeInBytes = DL.getTypeAllocSize(Ty);
     uint64_t MinRZ = MinRedzoneSizeForGlobal();
     // MinRZ <= RZ <= kMaxGlobalRedzone

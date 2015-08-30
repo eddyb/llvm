@@ -3532,7 +3532,7 @@ Value *llvm::SimplifyGEPInst(ArrayRef<Value *> Ops, const DataLayout &DL,
                              const DominatorTree *DT, AssumptionCache *AC,
                              const Instruction *CxtI) {
   return ::SimplifyGEPInst(
-      cast<PointerType>(Ops[0]->getType()->getScalarType())->getElementType(),
+      cast<PointerType>(Ops[0]->getType()->getScalarType())->getPointerElementType(),
       Ops, Query(DL, TLI, DT, AC, CxtI), RecursionLimit);
 }
 
@@ -3885,7 +3885,7 @@ static Value *SimplifyCall(Value *V, IterTy ArgBegin, IterTy ArgEnd,
                            const Query &Q, unsigned MaxRecurse) {
   Type *Ty = V->getType();
   if (PointerType *PTy = dyn_cast<PointerType>(Ty))
-    Ty = PTy->getElementType();
+    Ty = PTy->getPointerElementType();
   FunctionType *FTy = cast<FunctionType>(Ty);
 
   // call undef -> undef

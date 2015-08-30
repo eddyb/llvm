@@ -455,7 +455,7 @@ Instruction *MemCpyOpt::tryMergingIntoMemset(Instruction *StartInst,
     unsigned Alignment = Range.Alignment;
     if (Alignment == 0) {
       Type *EltType =
-        cast<PointerType>(StartPtr->getType())->getElementType();
+        cast<PointerType>(StartPtr->getType())->getPointerElementType();
       Alignment = DL.getABITypeAlignment(EltType);
     }
 
@@ -740,7 +740,7 @@ bool MemCpyOpt::performCallSlotOptzn(Instruction *cpy,
       if (!A->hasStructRetAttr())
         return false;
 
-      Type *StructTy = cast<PointerType>(A->getType())->getElementType();
+      Type *StructTy = cast<PointerType>(A->getType())->getPointerElementType();
       if (!StructTy->isSized()) {
         // The call may never return and hence the copy-instruction may never
         // be executed, and therefore it's not safe to say "the destination
@@ -1174,7 +1174,7 @@ bool MemCpyOpt::processByValArgument(CallSite CS, unsigned ArgNo) {
   const DataLayout &DL = CS.getCaller()->getParent()->getDataLayout();
   // Find out what feeds this byval argument.
   Value *ByValArg = CS.getArgument(ArgNo);
-  Type *ByValTy = cast<PointerType>(ByValArg->getType())->getElementType();
+  Type *ByValTy = cast<PointerType>(ByValArg->getType())->getPointerElementType();
   uint64_t ByValSize = DL.getTypeAllocSize(ByValTy);
   MemDepResult DepInfo = MD->getPointerDependencyFrom(
       MemoryLocation(ByValArg, ByValSize), true,

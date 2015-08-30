@@ -513,7 +513,11 @@ bool FastISel::selectGetElementPtr(const User *I) {
       }
       Ty = StTy->getElementType(Field);
     } else {
-      Ty = cast<SequentialType>(Ty)->getElementType();
+      if (auto *PtrTy = dyn_cast<PointerType>(Ty)) {
+        Ty = PtrTy->getPointerElementType();
+      } else {
+        Ty = cast<SequentialType>(Ty)->getElementType();
+      }
 
       // If this is a constant subscript, handle it quickly.
       if (const auto *CI = dyn_cast<ConstantInt>(Idx)) {
@@ -881,7 +885,7 @@ bool FastISel::lowerCallTo(const CallInst *CI, MCSymbol *Symbol,
   ImmutableCallSite CS(CI);
 
   PointerType *PT = cast<PointerType>(CS.getCalledValue()->getType());
-  FunctionType *FTy = cast<FunctionType>(PT->getElementType());
+  FunctionType *FTy = cast<FunctionType>(PT->getPointerElementType());
   Type *RetTy = FTy->getReturnType();
 
   ArgListTy Args;
@@ -947,7 +951,7 @@ bool FastISel::lowerCallTo(CallLoweringInfo &CLI) {
   for (auto &Arg : CLI.getArgs()) {
     Type *FinalType = Arg.Ty;
     if (Arg.IsByVal)
-      FinalType = cast<PointerType>(Arg.Ty)->getElementType();
+      FinalType = cast<PointerType>(Arg.Ty)->getPointerElementType();
     bool NeedsRegBlock = TLI.functionArgumentNeedsConsecutiveRegisters(
         FinalType, CLI.CallConv, CLI.IsVarArg);
 
@@ -973,7 +977,7 @@ bool FastISel::lowerCallTo(CallLoweringInfo &CLI) {
     }
     if (Arg.IsByVal || Arg.IsInAlloca) {
       PointerType *Ty = cast<PointerType>(Arg.Ty);
-      Type *ElementTy = Ty->getElementType();
+      Type *ElementTy = Ty->getPointerElementType();
       unsigned FrameSize = DL.getTypeAllocSize(ElementTy);
       // For ByVal, alignment should come from FE. BE will guess if this info is
       // not there, but there are cases it cannot get right.
@@ -1011,7 +1015,7 @@ bool FastISel::lowerCall(const CallInst *CI) {
   ImmutableCallSite CS(CI);
 
   PointerType *PT = cast<PointerType>(CS.getCalledValue()->getType());
-  FunctionType *FuncTy = cast<FunctionType>(PT->getElementType());
+  FunctionType *FuncTy = cast<FunctionType>(PT->getPointerElementType());
   Type *RetTy = FuncTy->getReturnType();
 
   ArgListTy Args;

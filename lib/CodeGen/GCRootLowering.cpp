@@ -171,7 +171,7 @@ static bool InsertRootInitializers(Function &F, AllocaInst **Roots,
     if (!InitedRoots.count(*I)) {
       StoreInst *SI = new StoreInst(
           ConstantPointerNull::get(cast<PointerType>(
-              cast<PointerType>((*I)->getType())->getElementType())),
+              cast<PointerType>((*I)->getType())->getPointerElementType())),
           *I);
       SI->insertAfter(*I);
       MadeChange = true;

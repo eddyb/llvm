@@ -2765,8 +2765,8 @@ std::error_code BitcodeReader::parseConstants() {
 
       if (PointeeType &&
           PointeeType !=
-              cast<SequentialType>(Elts[0]->getType()->getScalarType())
-                  ->getElementType())
+              cast<PointerType>(Elts[0]->getType()->getScalarType())
+                  ->getPointerElementType())
         return error("Explicit gep operator type does not match pointee type "
                      "of pointer operand");
 
@@ -2899,7 +2899,7 @@ std::error_code BitcodeReader::parseConstants() {
       for (unsigned i = 0; i != ConstStrSize; ++i)
         ConstrStr += (char)Record[3+AsmStrSize+i];
       PointerType *PTy = cast<PointerType>(CurTy);
-      V = InlineAsm::get(cast<FunctionType>(PTy->getElementType()),
+      V = InlineAsm::get(cast<FunctionType>(PTy->getPointerElementType()),
                          AsmStr, ConstrStr, HasSideEffects, IsAlignStack);
       break;
     }
@@ -2924,7 +2924,7 @@ std::error_code BitcodeReader::parseConstants() {
       for (unsigned i = 0; i != ConstStrSize; ++i)
         ConstrStr += (char)Record[3+AsmStrSize+i];
       PointerType *PTy = cast<PointerType>(CurTy);
-      V = InlineAsm::get(cast<FunctionType>(PTy->getElementType()),
+      V = InlineAsm::get(cast<FunctionType>(PTy->getPointerElementType()),
                          AsmStr, ConstrStr, HasSideEffects, IsAlignStack,
                          InlineAsm::AsmDialect(AsmDialect));
       break;
@@ -3472,7 +3472,7 @@ std::error_code BitcodeReader::parseModule(uint64_t ResumeBit,
         if (!Ty->isPointerTy())
           return error("Invalid type for value");
         AddressSpace = cast<PointerType>(Ty)->getAddressSpace();
-        Ty = cast<PointerType>(Ty)->getElementType();
+        Ty = cast<PointerType>(Ty)->getPointerElementType();
       }
 
       uint64_t RawLinkage = Record[3];
@@ -3545,7 +3545,7 @@ std::error_code BitcodeReader::parseModule(uint64_t ResumeBit,
       if (!Ty)
         return error("Invalid record");
       if (auto *PTy = dyn_cast<PointerType>(Ty))
-        Ty = PTy->getElementType();
+        Ty = PTy->getPointerElementType();
       auto *FTy = dyn_cast<FunctionType>(Ty);
       if (!FTy)
         return error("Invalid type for value");
@@ -3636,7 +3636,7 @@ std::error_code BitcodeReader::parseModule(uint64_t ResumeBit,
         auto *PTy = dyn_cast<PointerType>(Ty);
         if (!PTy)
           return error("Invalid type for value");
-        Ty = PTy->getElementType();
+        Ty = PTy->getPointerElementType();
         AddrSpace = PTy->getAddressSpace();
       } else {
         AddrSpace = Record[OpNum++];
@@ -3934,7 +3934,7 @@ static std::error_code typeCheckLoadStoreInst(Type *ValType, Type *PtrType) {
   LLVMContext &Context = PtrType->getContext();
   if (!isa<PointerType>(PtrType))
     return error(Context, "Load/Store operand is not a pointer type");
-  Type *ElemType = cast<PointerType>(PtrType)->getElementType();
+  Type *ElemType = cast<PointerType>(PtrType)->getPointerElementType();
 
   if (ValType && ValType != ElemType)
     return error(Context, "Explicit load/store type does not match pointee "
@@ -4175,11 +4175,11 @@ std::error_code BitcodeReader::parseFunctionBody(Function *F) {
         return error("Invalid record");
 
       if (!Ty)
-        Ty = cast<SequentialType>(BasePtr->getType()->getScalarType())
-                 ->getElementType();
+        Ty = cast<PointerType>(BasePtr->getType()->getScalarType())
+                 ->getPointerElementType();
       else if (Ty !=
-               cast<SequentialType>(BasePtr->getType()->getScalarType())
-                   ->getElementType())
+               cast<PointerType>(BasePtr->getType()->getScalarType())
+                   ->getPointerElementType())
         return error(
             "Explicit gep type does not match pointee type of pointer operand");
 
@@ -4681,10 +4681,10 @@ std::error_code BitcodeReader::parseFunctionBody(Function *F) {
       if (!CalleeTy)
         return error("Callee is not a pointer");
       if (!FTy) {
-        FTy = dyn_cast<FunctionType>(CalleeTy->getElementType());
+        FTy = dyn_cast<FunctionType>(CalleeTy->getPointerElementType());
         if (!FTy)
           return error("Callee is not of pointer to function type");
-      } else if (CalleeTy->getElementType() != FTy)
+      } else if (CalleeTy->getPointerElementType() != FTy)
         return error("Explicit invoke type does not match pointee type of "
                      "callee operand");
       if (Record.size() < FTy->getNumParams() + OpNum)
@@ -4829,7 +4829,7 @@ std::error_code BitcodeReader::parseFunctionBody(Function *F) {
         auto *PTy = dyn_cast_or_null<PointerType>(Ty);
         if (!PTy)
           return error("Old-style alloca with a non-pointer type");
-        Ty = PTy->getElementType();
+        Ty = PTy->getPointerElementType();
       }
       Type *OpTy = getTypeByID(Record[1]);
       Value *Size = getFnValueByID(Record[2], OpTy);
@@ -4859,7 +4859,7 @@ std::error_code BitcodeReader::parseFunctionBody(Function *F) {
       if (std::error_code EC = typeCheckLoadStoreInst(Ty, Op->getType()))
         return EC;
       if (!Ty)
-        Ty = cast<PointerType>(Op->getType())->getElementType();
+        Ty = cast<PointerType>(Op->getType())->getPointerElementType();
 
       unsigned Align;
       if (std::error_code EC = parseAlignmentValue(Record[OpNum], Align))
@@ -4883,7 +4883,7 @@ std::error_code BitcodeReader::parseFunctionBody(Function *F) {
       if (std::error_code EC = typeCheckLoadStoreInst(Ty, Op->getType()))
         return EC;
       if (!Ty)
-        Ty = cast<PointerType>(Op->getType())->getElementType();
+        Ty = cast<PointerType>(Op->getType())->getPointerElementType();
 
       AtomicOrdering Ordering = getDecodedOrdering(Record[OpNum + 2]);
       if (Ordering == NotAtomic || Ordering == Release ||
@@ -4909,7 +4909,7 @@ std::error_code BitcodeReader::parseFunctionBody(Function *F) {
           (BitCode == bitc::FUNC_CODE_INST_STORE
                ? getValueTypePair(Record, OpNum, NextValueNo, Val)
                : popValue(Record, OpNum, NextValueNo,
-                          cast<PointerType>(Ptr->getType())->getElementType(),
+                          cast<PointerType>(Ptr->getType())->getPointerElementType(),
                           Val)) ||
           OpNum + 2 != Record.size())
         return error("Invalid record");
@@ -4933,7 +4933,7 @@ std::error_code BitcodeReader::parseFunctionBody(Function *F) {
           (BitCode == bitc::FUNC_CODE_INST_STOREATOMIC
                ? getValueTypePair(Record, OpNum, NextValueNo, Val)
                : popValue(Record, OpNum, NextValueNo,
-                          cast<PointerType>(Ptr->getType())->getElementType(),
+                          cast<PointerType>(Ptr->getType())->getPointerElementType(),
                           Val)) ||
           OpNum + 4 != Record.size())
         return error("Invalid record");
@@ -4966,7 +4966,7 @@ std::error_code BitcodeReader::parseFunctionBody(Function *F) {
           (BitCode == bitc::FUNC_CODE_INST_CMPXCHG
                ? getValueTypePair(Record, OpNum, NextValueNo, Cmp)
                : popValue(Record, OpNum, NextValueNo,
-                          cast<PointerType>(Ptr->getType())->getElementType(),
+                          cast<PointerType>(Ptr->getType())->getPointerElementType(),
                           Cmp)) ||
           popValue(Record, OpNum, NextValueNo, Cmp->getType(), New) ||
           Record.size() < OpNum + 3 || Record.size() > OpNum + 5)
@@ -5009,7 +5009,7 @@ std::error_code BitcodeReader::parseFunctionBody(Function *F) {
       Value *Ptr, *Val;
       if (getValueTypePair(Record, OpNum, NextValueNo, Ptr) ||
           popValue(Record, OpNum, NextValueNo,
-                    cast<PointerType>(Ptr->getType())->getElementType(), Val) ||
+                    cast<PointerType>(Ptr->getType())->getPointerElementType(), Val) ||
           OpNum+4 != Record.size())
         return error("Invalid record");
       AtomicRMWInst::BinOp Operation = getDecodedRMWOperation(Record[OpNum]);
@@ -5066,10 +5066,10 @@ std::error_code BitcodeReader::parseFunctionBody(Function *F) {
       if (!OpTy)
         return error("Callee is not a pointer type");
       if (!FTy) {
-        FTy = dyn_cast<FunctionType>(OpTy->getElementType());
+        FTy = dyn_cast<FunctionType>(OpTy->getPointerElementType());
         if (!FTy)
           return error("Callee is not of pointer to function type");
-      } else if (OpTy->getElementType() != FTy)
+      } else if (OpTy->getPointerElementType() != FTy)
         return error("Explicit call type does not match pointee type of "
                      "callee operand");
       if (Record.size() < FTy->getNumParams() + OpNum)

@@ -242,7 +242,7 @@ void GlobalVariable::setInitializer(Constant *InitVal) {
       setGlobalVariableNumOperands(0);
     }
   } else {
-    assert(InitVal->getType() == getType()->getElementType() &&
+    assert(InitVal->getType() == getType()->getPointerElementType() &&
            "Initializer type must match GlobalVariable type");
     // Note, the num operands is used to compute the offset of the operand, so
     // the order here matters.  We need to set num operands to 1 first so that
@@ -300,8 +300,8 @@ GlobalAlias *GlobalAlias::create(Type *Ty, unsigned AddressSpace,
 GlobalAlias *GlobalAlias::create(LinkageTypes Link, const Twine &Name,
                                  GlobalValue *Aliasee) {
   PointerType *PTy = Aliasee->getType();
-  return create(PTy->getElementType(), PTy->getAddressSpace(), Link, Name,
-                Aliasee);
+  return create(PTy->getPointerElementType(), PTy->getAddressSpace(),
+                Link, Name, Aliasee);
 }
 
 GlobalAlias *GlobalAlias::create(const Twine &Name, GlobalValue *Aliasee) {

@@ -256,7 +256,7 @@ void CallInst::init(FunctionType *FTy, Value *Func, ArrayRef<Value *> Args,
 
 void CallInst::init(Value *Func, const Twine &NameStr) {
   FTy =
-      cast<FunctionType>(cast<PointerType>(Func->getType())->getElementType());
+      cast<FunctionType>(cast<PointerType>(Func->getType())->getPointerElementType());
   assert(getNumOperands() == 1 && "NumOperands not set up?");
   Op<-1>() = Func;
 
@@ -268,7 +268,7 @@ void CallInst::init(Value *Func, const Twine &NameStr) {
 CallInst::CallInst(Value *Func, const Twine &Name,
                    Instruction *InsertBefore)
   : Instruction(cast<FunctionType>(cast<PointerType>(Func->getType())
-                                   ->getElementType())->getReturnType(),
+                                   ->getPointerElementType())->getReturnType(),
                 Instruction::Call,
                 OperandTraits<CallInst>::op_end(this) - 1,
                 1, InsertBefore) {
@@ -278,7 +278,7 @@ CallInst::CallInst(Value *Func, const Twine &Name,
 CallInst::CallInst(Value *Func, const Twine &Name,
                    BasicBlock *InsertAtEnd)
   : Instruction(cast<FunctionType>(cast<PointerType>(Func->getType())
-                                   ->getElementType())->getReturnType(),
+                                   ->getPointerElementType())->getReturnType(),
                 Instruction::Call,
                 OperandTraits<CallInst>::op_end(this) - 1,
                 1, InsertAtEnd) {
@@ -1221,7 +1221,7 @@ LoadInst::LoadInst(Type *Ty, Value *Ptr, const Twine &Name, bool isVolatile,
                    unsigned Align, AtomicOrdering Order,
                    SynchronizationScope SynchScope, Instruction *InsertBef)
     : UnaryInstruction(Ty, Load, Ptr, InsertBef) {
-  assert(Ty == cast<PointerType>(Ptr->getType())->getElementType());
+  assert(Ty == cast<PointerType>(Ptr->getType())->getPointerElementType());
   setVolatile(isVolatile);
   setAlignment(Align);
   setAtomic(Order, SynchScope);
@@ -1233,7 +1233,7 @@ LoadInst::LoadInst(Value *Ptr, const Twine &Name, bool isVolatile,
                    unsigned Align, AtomicOrdering Order,
                    SynchronizationScope SynchScope,
                    BasicBlock *InsertAE)
-  : UnaryInstruction(cast<PointerType>(Ptr->getType())->getElementType(),
+  : UnaryInstruction(cast<PointerType>(Ptr->getType())->getPointerElementType(),
                      Load, Ptr, InsertAE) {
   setVolatile(isVolatile);
   setAlignment(Align);
@@ -1243,7 +1243,7 @@ LoadInst::LoadInst(Value *Ptr, const Twine &Name, bool isVolatile,
 }
 
 LoadInst::LoadInst(Value *Ptr, const char *Name, Instruction *InsertBef)
-  : UnaryInstruction(cast<PointerType>(Ptr->getType())->getElementType(),
+  : UnaryInstruction(cast<PointerType>(Ptr->getType())->getPointerElementType(),
                      Load, Ptr, InsertBef) {
   setVolatile(false);
   setAlignment(0);
@@ -1253,7 +1253,7 @@ LoadInst::LoadInst(Value *Ptr, const char *Name, Instruction *InsertBef)
 }
 
 LoadInst::LoadInst(Value *Ptr, const char *Name, BasicBlock *InsertAE)
-  : UnaryInstruction(cast<PointerType>(Ptr->getType())->getElementType(),
+  : UnaryInstruction(cast<PointerType>(Ptr->getType())->getPointerElementType(),
                      Load, Ptr, InsertAE) {
   setVolatile(false);
   setAlignment(0);
@@ -1265,7 +1265,7 @@ LoadInst::LoadInst(Value *Ptr, const char *Name, BasicBlock *InsertAE)
 LoadInst::LoadInst(Type *Ty, Value *Ptr, const char *Name, bool isVolatile,
                    Instruction *InsertBef)
     : UnaryInstruction(Ty, Load, Ptr, InsertBef) {
-  assert(Ty == cast<PointerType>(Ptr->getType())->getElementType());
+  assert(Ty == cast<PointerType>(Ptr->getType())->getPointerElementType());
   setVolatile(isVolatile);
   setAlignment(0);
   setAtomic(NotAtomic);
@@ -1275,7 +1275,7 @@ LoadInst::LoadInst(Type *Ty, Value *Ptr, const char *Name, bool isVolatile,
 
 LoadInst::LoadInst(Value *Ptr, const char *Name, bool isVolatile,
                    BasicBlock *InsertAE)
-  : UnaryInstruction(cast<PointerType>(Ptr->getType())->getElementType(),
+  : UnaryInstruction(cast<PointerType>(Ptr->getType())->getPointerElementType(),
                      Load, Ptr, InsertAE) {
   setVolatile(isVolatile);
   setAlignment(0);
@@ -1302,7 +1302,7 @@ void StoreInst::AssertOK() {
   assert(getOperand(1)->getType()->isPointerTy() &&
          "Ptr must have pointer type!");
   assert(getOperand(0)->getType() ==
-                 cast<PointerType>(getOperand(1)->getType())->getElementType()
+                 cast<PointerType>(getOperand(1)->getType())->getPointerElementType()
          && "Ptr must be a pointer to Val type!");
   assert(!(isAtomic() && getAlignment() == 0) &&
          "Alignment required for atomic store");
@@ -1393,10 +1393,10 @@ void AtomicCmpXchgInst::Init(Value *Ptr, Value *Cmp, Value *NewVal,
   assert(getOperand(0)->getType()->isPointerTy() &&
          "Ptr must have pointer type!");
   assert(getOperand(1)->getType() ==
-                 cast<PointerType>(getOperand(0)->getType())->getElementType()
+                 cast<PointerType>(getOperand(0)->getType())->getPointerElementType()
          && "Ptr must be a pointer to Cmp type!");
   assert(getOperand(2)->getType() ==
-                 cast<PointerType>(getOperand(0)->getType())->getElementType()
+                 cast<PointerType>(getOperand(0)->getType())->getPointerElementType()
          && "Ptr must be a pointer to NewVal type!");
   assert(SuccessOrdering != NotAtomic &&
          "AtomicCmpXchg instructions must be atomic!");
@@ -1452,7 +1452,7 @@ void AtomicRMWInst::Init(BinOp Operation, Value *Ptr, Value *Val,
   assert(getOperand(0)->getType()->isPointerTy() &&
          "Ptr must have pointer type!");
   assert(getOperand(1)->getType() ==
-         cast<PointerType>(getOperand(0)->getType())->getElementType()
+         cast<PointerType>(getOperand(0)->getType())->getPointerElementType()
          && "Ptr must be a pointer to Val type!");
   assert(Ordering != NotAtomic &&
          "AtomicRMW instructions must be atomic!");
@@ -1549,7 +1549,7 @@ static Type *getIndexedTypeInternal(Type *Agg, ArrayRef<IndexTy> IdxList) {
   unsigned CurIdx = 1;
   for (; CurIdx != IdxList.size(); ++CurIdx) {
     CompositeType *CT = dyn_cast<CompositeType>(Agg);
-    if (!CT || CT->isPointerTy()) return nullptr;
+    if (!CT) return nullptr;
     IndexTy Index = IdxList[CurIdx];
     if (!CT->indexValid(Index)) return nullptr;
     Agg = CT->getTypeAtIndex(Index);
@@ -2527,8 +2527,11 @@ unsigned CastInst::isEliminableCastPair(
     case 14:
       // bitcast, addrspacecast -> addrspacecast if the element type of
       // bitcast's source is the same as that of addrspacecast's destination.
-      if (SrcTy->getPointerElementType() == DstTy->getPointerElementType())
-        return Instruction::AddrSpaceCast;
+      if (auto *SrcPtrTy = dyn_cast<PointerType>(SrcTy))
+        if (auto *DstPtrTy = dyn_cast<PointerType>(DstTy))
+          if (SrcPtrTy->getPointerElementType() ==
+              DstPtrTy->getPointerElementType())
+            return Instruction::AddrSpaceCast;
       return 0;
 
     case 15:

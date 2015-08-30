@@ -159,8 +159,7 @@ unsigned Type::getFunctionNumParams() const {
   return cast<FunctionType>(this)->getNumParams();
 }
 
-/// CompositeType - Common super class of ArrayType, StructType, PointerType
-/// and VectorType.
+/// CompositeType - Common super class of ArrayType, StructType and VectorType.
 class CompositeType : public Type {
 protected:
   explicit CompositeType(LLVMContext &C, TypeID tid) : Type(C, tid) {}
@@ -178,7 +177,6 @@ public:
   static inline bool classof(const Type *T) {
     return T->getTypeID() == ArrayTyID ||
            T->getTypeID() == StructTyID ||
-           T->getTypeID() == PointerTyID ||
            T->getTypeID() == VectorTyID;
   }
 };
@@ -322,13 +320,12 @@ Type *Type::getStructElementType(unsigned N) const {
   return cast<StructType>(this)->getElementType(N);
 }
 
-/// SequentialType - This is the superclass of the array, pointer and vector
-/// type classes.  All of these represent "arrays" in memory.  The array type
-/// represents a specifically sized array, pointer types are unsized/unknown
-/// size arrays, vector types represent specifically sized arrays that
-/// allow for use of SIMD instructions.  SequentialType holds the common
-/// features of all, which stem from the fact that all three lay their
-/// components out in memory identically.
+/// SequentialType - This is the superclass of the array and vector type
+/// classes.  All of these represent "arrays" in memory.  The array type
+/// represents a specifically sized array, and vector types represent
+/// specifically sized arrays that allow for use of SIMD instructions.
+/// SequentialType holds the common features of all, which stem from
+/// the fact that they both lay their components out in memory identically.
 ///
 class SequentialType : public CompositeType {
   Type *ContainedType;               ///< Storage for the single contained type.
@@ -348,7 +345,6 @@ public:
   /// Methods for support type inquiry through isa, cast, and dyn_cast.
   static inline bool classof(const Type *T) {
     return T->getTypeID() == ArrayTyID ||
-           T->getTypeID() == PointerTyID ||
            T->getTypeID() == VectorTyID;
   }
 };
@@ -481,12 +477,19 @@ unsigned Type::getVectorNumElements() const {
 
 /// PointerType - Class to represent pointers.
 ///
-class PointerType : public SequentialType {
+class PointerType : public Type {
+  Type *PointeeType;               ///< Storage for the pointee type.
   PointerType(const PointerType &) = delete;
   const PointerType &operator=(const PointerType &) = delete;
   explicit PointerType(Type *ElType, unsigned AddrSpace);
 
 public:
+  LLVM_ATTRIBUTE_DEPRECATED(Type *getElementType() const,
+                            "renamed to getPointerElementType") {
+    return getPointerElementType();
+  }
+  Type *getPointerElementType() const { return ContainedTys[0]; }
+
   /// PointerType::get - This constructs a pointer to an object of the specified
   /// type in a numbered address space.
   static PointerType *get(Type *ElementType, unsigned AddressSpace);

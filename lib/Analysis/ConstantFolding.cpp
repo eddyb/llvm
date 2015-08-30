@@ -401,7 +401,7 @@ static bool ReadDataFromGlobal(Constant *C, uint64_t ByteOffset,
 static Constant *FoldReinterpretLoadFromConstPtr(Constant *C,
                                                  const DataLayout &DL) {
   PointerType *PTy = cast<PointerType>(C->getType());
-  Type *LoadTy = PTy->getElementType();
+  Type *LoadTy = PTy->getPointerElementType();
   IntegerType *IntType = dyn_cast<IntegerType>(LoadTy);
 
   // If this isn't an integer load we can't fold it directly.
@@ -483,7 +483,7 @@ static Constant *ConstantFoldLoadThroughBitcast(ConstantExpr *CE,
   auto *DestPtrTy = dyn_cast<PointerType>(CE->getType());
   if (!DestPtrTy)
     return nullptr;
-  Type *DestTy = DestPtrTy->getElementType();
+  Type *DestTy = DestPtrTy->getPointerElementType();
 
   Constant *C = ConstantFoldLoadFromConstPtr(CE->getOperand(0), DL);
   if (!C)
@@ -559,7 +559,7 @@ Constant *llvm::ConstantFoldLoadFromConstPtr(Constant *C,
   StringRef Str;
   if (getConstantStringInfo(CE, Str) && !Str.empty()) {
     unsigned StrLen = Str.size();
-    Type *Ty = cast<PointerType>(CE->getType())->getElementType();
+    Type *Ty = cast<PointerType>(CE->getType())->getPointerElementType();
     unsigned NumBits = Ty->getPrimitiveSizeInBits();
     // Replace load with immediate integer if the result is an integer or fp
     // value.
@@ -594,7 +594,7 @@ Constant *llvm::ConstantFoldLoadFromConstPtr(Constant *C,
   if (GlobalVariable *GV =
           dyn_cast<GlobalVariable>(GetUnderlyingObject(CE, DL))) {
     if (GV->isConstant() && GV->hasDefinitiveInitializer()) {
-      Type *ResTy = cast<PointerType>(C->getType())->getElementType();
+      Type *ResTy = cast<PointerType>(C->getType())->getPointerElementType();
       if (GV->getInitializer()->isNullValue())
         return Constant::getNullValue(ResTy);
       if (isa<UndefValue>(GV->getInitializer()))
@@ -685,7 +685,7 @@ static Constant *CastGEPIndices(Type *SrcTy, ArrayRef<Constant *> Ops,
     if ((i == 1 ||
          !isa<StructType>(GetElementPtrInst::getIndexedType(
              cast<PointerType>(Ops[0]->getType()->getScalarType())
-                 ->getElementType(),
+                 ->getPointerElementType(),
              Ops.slice(1, i - 1)))) &&
         Ops[i]->getType() != IntPtrTy) {
       Any = true;
@@ -719,7 +719,7 @@ static Constant* StripPtrCastKeepAS(Constant* Ptr) {
 
   // Preserve the address space number of the pointer.
   if (NewPtrTy->getAddressSpace() != OldPtrTy->getAddressSpace()) {
-    NewPtrTy = NewPtrTy->getElementType()->getPointerTo(
+    NewPtrTy = NewPtrTy->getPointerElementType()->getPointerTo(
       OldPtrTy->getAddressSpace());
     Ptr = ConstantExpr::getPointerCast(Ptr, NewPtrTy);
   }
@@ -731,12 +731,12 @@ static Constant *SymbolicallyEvaluateGEP(Type *SrcTy, ArrayRef<Constant *> Ops,
                                          Type *ResultTy, const DataLayout &DL,
                                          const TargetLibraryInfo *TLI) {
   Constant *Ptr = Ops[0];
-  if (!Ptr->getType()->getPointerElementType()->isSized() ||
+  if (!cast<PointerType>(Ptr->getType())->getPointerElementType()->isSized() ||
       !Ptr->getType()->isPointerTy())
     return nullptr;
 
   Type *IntPtrTy = DL.getIntPtrType(Ptr->getType());
-  Type *ResultElementTy = ResultTy->getPointerElementType();
+  Type *ResultElementTy = cast<PointerType>(ResultTy)->getPointerElementType();
 
   // If this is a constant expr gep that is effectively computing an
   // "offsetof", fold it into 'cast int Size to T*' instead of 'gep 0, 0, 12'
@@ -813,33 +813,7 @@ static Constant *SymbolicallyEvaluateGEP(Type *SrcTy, ArrayRef<Constant *> Ops,
   SmallVector<Constant *, 32> NewIdxs;
 
   do {
-    if (SequentialType *ATy = dyn_cast<SequentialType>(Ty)) {
-      if (ATy->isPointerTy()) {
-        // The only pointer indexing we'll do is on the first index of the GEP.
-        if (!NewIdxs.empty())
-          break;
-
-        // Only handle pointers to sized types, not pointers to functions.
-        if (!ATy->getElementType()->isSized())
-          return nullptr;
-      }
-
-      // Determine which element of the array the offset points into.
-      APInt ElemSize(BitWidth, DL.getTypeAllocSize(ATy->getElementType()));
-      if (ElemSize == 0)
-        // The element size is 0. This may be [0 x Ty]*, so just use a zero
-        // index for this level and proceed to the next level to see if it can
-        // accommodate the offset.
-        NewIdxs.push_back(ConstantInt::get(IntPtrTy, 0));
-      else {
-        // The element size is non-zero divide the offset by the element
-        // size (rounding down), to compute the index at this level.
-        APInt NewIdx = Offset.udiv(ElemSize);
-        Offset -= NewIdx * ElemSize;
-        NewIdxs.push_back(ConstantInt::get(IntPtrTy, NewIdx));
-      }
-      Ty = ATy->getElementType();
-    } else if (StructType *STy = dyn_cast<StructType>(Ty)) {
+    if (StructType *STy = dyn_cast<StructType>(Ty)) {
       // If we end up with an offset that isn't valid for this struct type, we
       // can't re-form this GEP in a regular form, so bail out. The pointer
       // operand likely went through casts that are necessary to make the GEP
@@ -857,8 +831,37 @@ static Constant *SymbolicallyEvaluateGEP(Type *SrcTy, ArrayRef<Constant *> Ops,
       Offset -= APInt(BitWidth, SL.getElementOffset(ElIdx));
       Ty = STy->getTypeAtIndex(ElIdx);
     } else {
-      // We've reached some non-indexable type.
-      break;
+      if (auto *PtrTy = dyn_cast<PointerType>(Ty)) {
+        // The only pointer indexing we'll do is on the first index of the GEP.
+        if (!NewIdxs.empty())
+          break;
+
+        Ty = PtrTy->getPointerElementType();
+
+        // Only handle pointers to sized types, not pointers to functions.
+        if (!Ty->isSized())
+          return nullptr;
+      } else if (auto *ATy = dyn_cast<SequentialType>(Ty)) {
+        Ty = ATy->getElementType();
+      } else {
+        // We've reached some non-indexable type.
+        break;
+      }
+
+      // Determine which element of the array the offset points into.
+      APInt ElemSize(BitWidth, DL.getTypeAllocSize(Ty));
+      if (ElemSize == 0)
+        // The element size is 0. This may be [0 x Ty]*, so just use a zero
+        // index for this level and proceed to the next level to see if it can
+        // accommodate the offset.
+        NewIdxs.push_back(ConstantInt::get(IntPtrTy, 0));
+      else {
+        // The element size is non-zero divide the offset by the element
+        // size (rounding down), to compute the index at this level.
+        APInt NewIdx = Offset.udiv(ElemSize);
+        Offset -= NewIdx * ElemSize;
+        NewIdxs.push_back(ConstantInt::get(IntPtrTy, NewIdx));
+      }
     }
   } while (Ty != ResultElementTy);
 
@@ -870,7 +873,7 @@ static Constant *SymbolicallyEvaluateGEP(Type *SrcTy, ArrayRef<Constant *> Ops,
 
   // Create a GEP.
   Constant *C = ConstantExpr::getGetElementPtr(SrcTy, Ptr, NewIdxs);
-  assert(C->getType()->getPointerElementType() == Ty &&
+  assert(cast<PointerType>(C->getType())->getPointerElementType() == Ty &&
          "Computed GetElementPtr has unexpected type!");
 
   // If we ended up indexing a member with a type that doesn't match

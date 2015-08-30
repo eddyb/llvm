@@ -409,7 +409,7 @@ public:
     const GlobalValue *BaseGV = nullptr;
     if (Ptr != nullptr) {
       // TODO: will remove this when pointers have an opaque type.
-      assert(Ptr->getType()->getScalarType()->getPointerElementType() ==
+      assert(cast<PointerType>(Ptr->getType()->getScalarType())->getPointerElementType() ==
                  PointeeType &&
              "explicit pointee type doesn't match operand's pointee type");
       BaseGV = dyn_cast<GlobalValue>(Ptr->stripPointerCasts());
@@ -429,7 +429,12 @@ public:
       if (!ConstIdx)
         if (auto Splat = getSplatValue(*I))
           ConstIdx = dyn_cast<ConstantInt>(Splat);
-      if (isa<SequentialType>(*GTI)) {
+      if (StructType *STy = dyn_cast<StructType>(*GTI)) {
+        // For structures the index is always splat or scalar constant
+        assert(ConstIdx && "Unexpected GEP index");
+        uint64_t Field = ConstIdx->getZExtValue();
+        BaseOffset += DL.getStructLayout(STy)->getElementOffset(Field);
+      } else {
         int64_t ElementSize = DL.getTypeAllocSize(GTI.getIndexedType());
         if (ConstIdx)
           BaseOffset += ConstIdx->getSExtValue() * ElementSize;
@@ -440,12 +445,6 @@ public:
             return TTI::TCC_Basic;
           Scale = ElementSize;
         }
-      } else {
-        StructType *STy = cast<StructType>(*GTI);
-        // For structures the index is always splat or scalar constant
-        assert(ConstIdx && "Unexpected GEP index");
-        uint64_t Field = ConstIdx->getZExtValue();
-        BaseOffset += DL.getStructLayout(STy)->getElementOffset(Field);
       }
     }
 
@@ -485,7 +484,7 @@ public:
       const Function *F = CS.getCalledFunction();
       if (!F) {
         // Just use the called value type.
-        Type *FTy = CS.getCalledValue()->getType()->getPointerElementType();
+        Type *FTy = cast<PointerType>(CS.getCalledValue()->getType())->getPointerElementType();
         return static_cast<T *>(this)
             ->getCallCost(cast<FunctionType>(FTy), CS.arg_size());
       }

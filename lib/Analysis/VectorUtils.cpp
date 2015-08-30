@@ -232,7 +232,7 @@ unsigned llvm::getGEPInductionOperand(const GetElementPtrInst *Gep) {
   const DataLayout &DL = Gep->getModule()->getDataLayout();
   unsigned LastOperand = Gep->getNumOperands() - 1;
   unsigned GEPAllocSize = DL.getTypeAllocSize(
-      cast<PointerType>(Gep->getType()->getScalarType())->getElementType());
+      cast<PointerType>(Gep->getType()->getScalarType())->getPointerElementType());
 
   // Walk backwards and try to peel off zeros.
   while (LastOperand > 1 && match(Gep->getOperand(LastOperand), m_Zero())) {
@@ -319,7 +319,7 @@ Value *llvm::getStrideFromPointer(Value *Ptr, ScalarEvolution *SE, Loop *Lp) {
   // pointer.
   if (OrigPtr == Ptr) {
     const DataLayout &DL = Lp->getHeader()->getModule()->getDataLayout();
-    DL.getTypeAllocSize(PtrTy->getElementType());
+    DL.getTypeAllocSize(PtrTy->getPointerElementType());
     if (const SCEVMulExpr *M = dyn_cast<SCEVMulExpr>(V)) {
       if (M->getOperand(0)->getSCEVType() != scConstant)
         return nullptr;

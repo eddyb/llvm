@@ -1644,7 +1644,7 @@ void LLVMSetExternallyInitialized(LLVMValueRef GlobalVar, LLVMBool IsExtInit) {
 LLVMValueRef LLVMAddAlias(LLVMModuleRef M, LLVMTypeRef Ty, LLVMValueRef Aliasee,
                           const char *Name) {
   auto *PTy = cast<PointerType>(unwrap(Ty));
-  return wrap(GlobalAlias::create(PTy->getElementType(), PTy->getAddressSpace(),
+  return wrap(GlobalAlias::create(PTy->getPointerElementType(), PTy->getAddressSpace(),
                                   GlobalValue::ExternalLinkage, Name,
                                   unwrap<Constant>(Aliasee), unwrap(M)));
 }

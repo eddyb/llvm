@@ -141,13 +141,12 @@ bool ArgPromotion::isDenselyPacked(Type *type, const DataLayout &DL) {
   if (DL.getTypeSizeInBits(type) != DL.getTypeAllocSizeInBits(type))
     return false;
 
-  if (!isa<CompositeType>(type))
+  if (!isa<CompositeType>(type) || isa<PointerType>(type))
     return true;
 
   // For homogenous sequential types, check for padding within members.
   if (SequentialType *seqTy = dyn_cast<SequentialType>(type))
-    return isa<PointerType>(seqTy) ||
-           isDenselyPacked(seqTy->getElementType(), DL);
+    return isDenselyPacked(seqTy->getElementType(), DL);
 
   // Check for padding within and between elements of a struct.
   StructType *StructTy = cast<StructType>(type);
@@ -256,7 +255,7 @@ CallGraphNode *ArgPromotion::PromoteArguments(CallGraphNode *CGN) {
   SmallPtrSet<Argument*, 8> ByValArgsToTransform;
   for (unsigned i = 0, e = PointerArgs.size(); i != e; ++i) {
     Argument *PtrArg = PointerArgs[i];
-    Type *AgTy = cast<PointerType>(PtrArg->getType())->getElementType();
+    Type *AgTy = cast<PointerType>(PtrArg->getType())->getPointerElementType();
 
     // Replace sret attribute with noalias. This reduces register pressure by
     // avoiding a register copy.
@@ -648,7 +647,7 @@ CallGraphNode *ArgPromotion::DoPromotion(Function *F,
        ++I, ++ArgIndex) {
     if (ByValArgsToTransform.count(&*I)) {
       // Simple byval argument? Just add all the struct element types.
-      Type *AgTy = cast<PointerType>(I->getType())->getElementType();
+      Type *AgTy = cast<PointerType>(I->getType())->getPointerElementType();
       StructType *STy = cast<StructType>(AgTy);
       Params.insert(Params.end(), STy->element_begin(), STy->element_end());
       ++NumByValArgsPromoted;
@@ -704,7 +703,7 @@ CallGraphNode *ArgPromotion::DoPromotion(Function *F,
              E = ArgIndices.end(); SI != E; ++SI) {
         // not allowed to dereference ->begin() if size() is 0
         Params.push_back(GetElementPtrInst::getIndexedType(
-            cast<PointerType>(I->getType()->getScalarType())->getElementType(),
+            cast<PointerType>(I->getType()->getScalarType())->getPointerElementType(),
             SI->second));
         assert(Params.back());
       }
@@ -783,7 +782,7 @@ CallGraphNode *ArgPromotion::DoPromotion(Function *F,
         }
       } else if (ByValArgsToTransform.count(&*I)) {
         // Emit a GEP and load for each element of the struct.
-        Type *AgTy = cast<PointerType>(I->getType())->getElementType();
+        Type *AgTy = cast<PointerType>(I->getType())->getPointerElementType();
         StructType *STy = cast<StructType>(AgTy);
         Value *Idxs[2] = {
               ConstantInt::get(Type::getInt32Ty(F->getContext()), 0), nullptr };
@@ -817,7 +816,11 @@ CallGraphNode *ArgPromotion::DoPromotion(Function *F,
                     Type::getInt64Ty(F->getContext()));
               Ops.push_back(ConstantInt::get(IdxTy, *II));
               // Keep track of the type we're currently indexing.
-              ElTy = cast<CompositeType>(ElTy)->getTypeAtIndex(*II);
+              if (auto *PtrTy = dyn_cast<PointerType>(ElTy)) {
+                ElTy = PtrTy->getPointerElementType();
+              } else {
+                ElTy = cast<CompositeType>(ElTy)->getTypeAtIndex(*II);
+              }
             }
             // And create a GEP to extract those indices.
             V = GetElementPtrInst::Create(SI->first, V, Ops,
@@ -910,7 +913,7 @@ CallGraphNode *ArgPromotion::DoPromotion(Function *F,
       Instruction *InsertPt = &NF->begin()->front();
 
       // Just add all the struct element types.
-      Type *AgTy = cast<PointerType>(I->getType())->getElementType();
+      Type *AgTy = cast<PointerType>(I->getType())->getPointerElementType();
       Value *TheAlloca = new AllocaInst(AgTy, nullptr, "", InsertPt);
       StructType *STy = cast<StructType>(AgTy);
       Value *Idxs[2] = {

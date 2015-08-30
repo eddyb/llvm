@@ -204,7 +204,7 @@ bool PPCLoopPreIncPrep::runOnLoop(Loop *L) {
 
       // There are no update forms for Altivec vector load/stores.
       if (ST && ST->hasAltivec() &&
-          PtrValue->getType()->getPointerElementType()->isVectorTy())
+          cast<PointerType>(PtrValue->getType())->getPointerElementType()->isVectorTy())
         continue;
 
       if (L->isLoopInvariant(PtrValue))

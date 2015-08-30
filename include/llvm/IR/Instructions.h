@@ -190,13 +190,13 @@ public:
            Instruction *InsertBefore = nullptr);
   LoadInst(Value *Ptr, const Twine &NameStr, bool isVolatile = false,
            Instruction *InsertBefore = nullptr)
-      : LoadInst(cast<PointerType>(Ptr->getType())->getElementType(), Ptr,
+      : LoadInst(cast<PointerType>(Ptr->getType())->getPointerElementType(), Ptr,
                  NameStr, isVolatile, InsertBefore) {}
   LoadInst(Value *Ptr, const Twine &NameStr, bool isVolatile,
            BasicBlock *InsertAtEnd);
   LoadInst(Value *Ptr, const Twine &NameStr, bool isVolatile, unsigned Align,
            Instruction *InsertBefore = nullptr)
-      : LoadInst(cast<PointerType>(Ptr->getType())->getElementType(), Ptr,
+      : LoadInst(cast<PointerType>(Ptr->getType())->getPointerElementType(), Ptr,
                  NameStr, isVolatile, Align, InsertBefore) {}
   LoadInst(Type *Ty, Value *Ptr, const Twine &NameStr, bool isVolatile,
            unsigned Align, Instruction *InsertBefore = nullptr);
@@ -205,7 +205,7 @@ public:
   LoadInst(Value *Ptr, const Twine &NameStr, bool isVolatile, unsigned Align,
            AtomicOrdering Order, SynchronizationScope SynchScope = CrossThread,
            Instruction *InsertBefore = nullptr)
-      : LoadInst(cast<PointerType>(Ptr->getType())->getElementType(), Ptr,
+      : LoadInst(cast<PointerType>(Ptr->getType())->getPointerElementType(), Ptr,
                  NameStr, isVolatile, Align, Order, SynchScope, InsertBefore) {}
   LoadInst(Type *Ty, Value *Ptr, const Twine &NameStr, bool isVolatile,
            unsigned Align, AtomicOrdering Order,
@@ -223,7 +223,7 @@ public:
   explicit LoadInst(Value *Ptr, const char *NameStr = nullptr,
                     bool isVolatile = false,
                     Instruction *InsertBefore = nullptr)
-      : LoadInst(cast<PointerType>(Ptr->getType())->getElementType(), Ptr,
+      : LoadInst(cast<PointerType>(Ptr->getType())->getPointerElementType(), Ptr,
                  NameStr, isVolatile, InsertBefore) {}
   LoadInst(Value *Ptr, const char *NameStr, bool isVolatile,
            BasicBlock *InsertAtEnd);
@@ -868,11 +868,11 @@ public:
     unsigned Values = 1 + unsigned(IdxList.size());
     if (!PointeeType)
       PointeeType =
-          cast<PointerType>(Ptr->getType()->getScalarType())->getElementType();
+          cast<PointerType>(Ptr->getType()->getScalarType())->getPointerElementType();
     else
       assert(
           PointeeType ==
-          cast<PointerType>(Ptr->getType()->getScalarType())->getElementType());
+          cast<PointerType>(Ptr->getType()->getScalarType())->getPointerElementType());
     return new (Values) GetElementPtrInst(PointeeType, Ptr, IdxList, Values,
                                           NameStr, InsertBefore);
   }
@@ -883,11 +883,11 @@ public:
     unsigned Values = 1 + unsigned(IdxList.size());
     if (!PointeeType)
       PointeeType =
-          cast<PointerType>(Ptr->getType()->getScalarType())->getElementType();
+          cast<PointerType>(Ptr->getType()->getScalarType())->getPointerElementType();
     else
       assert(
           PointeeType ==
-          cast<PointerType>(Ptr->getType()->getScalarType())->getElementType());
+          cast<PointerType>(Ptr->getType()->getScalarType())->getPointerElementType());
     return new (Values) GetElementPtrInst(PointeeType, Ptr, IdxList, Values,
                                           NameStr, InsertAtEnd);
   }
@@ -928,11 +928,6 @@ public:
   /// Transparently provide more efficient getOperand methods.
   DECLARE_TRANSPARENT_OPERAND_ACCESSORS(Value);
 
-  // getType - Overload to return most specific sequential type.
-  SequentialType *getType() const {
-    return cast<SequentialType>(Instruction::getType());
-  }
-
   Type *getSourceElementType() const { return SourceElementType; }
 
   void setSourceElementType(Type *Ty) { SourceElementType = Ty; }
@@ -940,7 +935,7 @@ public:
 
   Type *getResultElementType() const {
     assert(ResultElementType ==
-           cast<PointerType>(getType()->getScalarType())->getElementType());
+           cast<PointerType>(getType()->getScalarType())->getPointerElementType());
     return ResultElementType;
   }
 
@@ -991,7 +986,7 @@ public:
   /// instruction, which may be a vector of pointers.
   static Type *getGEPReturnType(Value *Ptr, ArrayRef<Value *> IdxList) {
     return getGEPReturnType(
-        cast<PointerType>(Ptr->getType()->getScalarType())->getElementType(),
+        cast<PointerType>(Ptr->getType()->getScalarType())->getPointerElementType(),
         Ptr, IdxList);
   }
   static Type *getGEPReturnType(Type *ElTy, Value *Ptr,
@@ -1071,7 +1066,7 @@ GetElementPtrInst::GetElementPtrInst(Type *PointeeType, Value *Ptr,
       SourceElementType(PointeeType),
       ResultElementType(getIndexedType(PointeeType, IdxList)) {
   assert(ResultElementType ==
-         cast<PointerType>(getType()->getScalarType())->getElementType());
+         cast<PointerType>(getType()->getScalarType())->getPointerElementType());
   init(Ptr, IdxList, NameStr);
 }
 GetElementPtrInst::GetElementPtrInst(Type *PointeeType, Value *Ptr,
@@ -1084,7 +1079,7 @@ GetElementPtrInst::GetElementPtrInst(Type *PointeeType, Value *Ptr,
       SourceElementType(PointeeType),
       ResultElementType(getIndexedType(PointeeType, IdxList)) {
   assert(ResultElementType ==
-         cast<PointerType>(getType()->getScalarType())->getElementType());
+         cast<PointerType>(getType()->getScalarType())->getPointerElementType());
   init(Ptr, IdxList, NameStr);
 }
 
@@ -1367,7 +1362,7 @@ class CallInst : public Instruction,
   void init(Value *Func, ArrayRef<Value *> Args,
             ArrayRef<OperandBundleDef> Bundles, const Twine &NameStr) {
     init(cast<FunctionType>(
-             cast<PointerType>(Func->getType())->getElementType()),
+             cast<PointerType>(Func->getType())->getPointerElementType()),
          Func, Args, Bundles, NameStr);
   }
   void init(FunctionType *FTy, Value *Func, ArrayRef<Value *> Args,
@@ -1383,7 +1378,7 @@ class CallInst : public Instruction,
                   ArrayRef<OperandBundleDef> Bundles, const Twine &NameStr,
                   Instruction *InsertBefore)
       : CallInst(cast<FunctionType>(
-                     cast<PointerType>(Func->getType())->getElementType()),
+                     cast<PointerType>(Func->getType())->getPointerElementType()),
                  Func, Args, Bundles, NameStr, InsertBefore) {}
 
   inline CallInst(Value *Func, ArrayRef<Value *> Args, const Twine &NameStr,
@@ -1414,14 +1409,14 @@ public:
                           const Twine &NameStr = "",
                           Instruction *InsertBefore = nullptr) {
     return Create(cast<FunctionType>(
-                      cast<PointerType>(Func->getType())->getElementType()),
+                      cast<PointerType>(Func->getType())->getPointerElementType()),
                   Func, Args, Bundles, NameStr, InsertBefore);
   }
   static CallInst *Create(Value *Func, ArrayRef<Value *> Args,
                           const Twine &NameStr,
                           Instruction *InsertBefore = nullptr) {
     return Create(cast<FunctionType>(
-                      cast<PointerType>(Func->getType())->getElementType()),
+                      cast<PointerType>(Func->getType())->getPointerElementType()),
                   Func, Args, None, NameStr, InsertBefore);
   }
   static CallInst *Create(FunctionType *Ty, Value *Func, ArrayRef<Value *> Args,
@@ -1776,13 +1771,13 @@ public:
   /// setCalledFunction - Set the function called.
   void setCalledFunction(Value* Fn) {
     setCalledFunction(
-        cast<FunctionType>(cast<PointerType>(Fn->getType())->getElementType()),
+        cast<FunctionType>(cast<PointerType>(Fn->getType())->getPointerElementType()),
         Fn);
   }
   void setCalledFunction(FunctionType *FTy, Value *Fn) {
     this->FTy = FTy;
     assert(FTy == cast<FunctionType>(
-                      cast<PointerType>(Fn->getType())->getElementType()));
+                      cast<PointerType>(Fn->getType())->getPointerElementType()));
     Op<-1>() = Fn;
   }
 
@@ -1830,7 +1825,7 @@ CallInst::CallInst(Value *Func, ArrayRef<Value *> Args,
                    BasicBlock *InsertAtEnd)
     : Instruction(
           cast<FunctionType>(cast<PointerType>(Func->getType())
-                                 ->getElementType())->getReturnType(),
+                                 ->getPointerElementType())->getReturnType(),
           Instruction::Call, OperandTraits<CallInst>::op_end(this) -
                                  (Args.size() + CountBundleInputs(Bundles) + 1),
           unsigned(Args.size() + CountBundleInputs(Bundles) + 1), InsertAtEnd) {
@@ -3338,7 +3333,7 @@ class InvokeInst : public TerminatorInst,
             ArrayRef<Value *> Args, ArrayRef<OperandBundleDef> Bundles,
             const Twine &NameStr) {
     init(cast<FunctionType>(
-             cast<PointerType>(Func->getType())->getElementType()),
+             cast<PointerType>(Func->getType())->getPointerElementType()),
          Func, IfNormal, IfException, Args, Bundles, NameStr);
   }
   void init(FunctionType *FTy, Value *Func, BasicBlock *IfNormal,
@@ -3353,7 +3348,7 @@ class InvokeInst : public TerminatorInst,
                     unsigned Values, const Twine &NameStr,
                     Instruction *InsertBefore)
       : InvokeInst(cast<FunctionType>(
-                       cast<PointerType>(Func->getType())->getElementType()),
+                       cast<PointerType>(Func->getType())->getPointerElementType()),
                    Func, IfNormal, IfException, Args, Bundles, Values, NameStr,
                    InsertBefore) {}
 
@@ -3383,7 +3378,7 @@ public:
                             const Twine &NameStr,
                             Instruction *InsertBefore = nullptr) {
     return Create(cast<FunctionType>(
-                      cast<PointerType>(Func->getType())->getElementType()),
+                      cast<PointerType>(Func->getType())->getPointerElementType()),
                   Func, IfNormal, IfException, Args, None, NameStr,
                   InsertBefore);
   }
@@ -3393,7 +3388,7 @@ public:
                             const Twine &NameStr = "",
                             Instruction *InsertBefore = nullptr) {
     return Create(cast<FunctionType>(
-                      cast<PointerType>(Func->getType())->getElementType()),
+                      cast<PointerType>(Func->getType())->getPointerElementType()),
                   Func, IfNormal, IfException, Args, Bundles, NameStr,
                   InsertBefore);
   }
@@ -3686,13 +3681,13 @@ public:
   /// setCalledFunction - Set the function called.
   void setCalledFunction(Value* Fn) {
     setCalledFunction(
-        cast<FunctionType>(cast<PointerType>(Fn->getType())->getElementType()),
+        cast<FunctionType>(cast<PointerType>(Fn->getType())->getPointerElementType()),
         Fn);
   }
   void setCalledFunction(FunctionType *FTy, Value *Fn) {
     this->FTy = FTy;
     assert(FTy == cast<FunctionType>(
-                      cast<PointerType>(Fn->getType())->getElementType()));
+                      cast<PointerType>(Fn->getType())->getPointerElementType()));
     Op<-3>() = Fn;
   }
 
@@ -3779,7 +3774,7 @@ InvokeInst::InvokeInst(Value *Func, BasicBlock *IfNormal,
                        const Twine &NameStr, BasicBlock *InsertAtEnd)
     : TerminatorInst(
           cast<FunctionType>(cast<PointerType>(Func->getType())
-                                 ->getElementType())->getReturnType(),
+                                 ->getPointerElementType())->getReturnType(),
           Instruction::Invoke, OperandTraits<InvokeInst>::op_end(this) - Values,
           Values, InsertAtEnd) {
   init(Func, IfNormal, IfException, Args, Bundles, NameStr);

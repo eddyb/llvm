@@ -120,7 +120,7 @@ static bool isLeakCheckerRoot(GlobalVariable *GV) {
     return false;
 
   SmallVector<Type *, 4> Types;
-  Types.push_back(cast<PointerType>(GV->getType())->getElementType());
+  Types.push_back(cast<PointerType>(GV->getType())->getPointerElementType());
 
   unsigned Limit = 20;
   do {
@@ -329,7 +329,7 @@ static bool CleanupConstantGlobalUsers(Value *V, Constant *Init,
         // we already know what the result of any load from that GEP is.
         // TODO: Handle splats.
         if (Init && isa<ConstantAggregateZero>(Init) && GEP->isInBounds())
-          SubInit = Constant::getNullValue(GEP->getType()->getElementType());
+          SubInit = Constant::getNullValue(cast<PointerType>(GEP->getType())->getPointerElementType());
       }
       Changed |= CleanupConstantGlobalUsers(GEP, SubInit, DL, TLI);
 
@@ -867,9 +867,9 @@ OptimizeGlobalAddressOfMalloc(GlobalVariable *GV, CallInst *CI, Type *AllocTy,
   }
 
   Constant *RepValue = NewGV;
-  if (NewGV->getType() != GV->getType()->getElementType())
+  if (NewGV->getType() != GV->getType()->getPointerElementType())
     RepValue = ConstantExpr::getBitCast(RepValue,
-                                        GV->getType()->getElementType());
+                                        GV->getType()->getPointerElementType());
 
   // If there is a comparison against null, we will insert a global bool to
   // keep track of whether the global was initialized yet or not.
@@ -1170,7 +1170,7 @@ static Value *GetHeapSROAValue(Value *V, unsigned FieldNo,
     // field.
 
     PointerType *PTy = cast<PointerType>(PN->getType());
-    StructType *ST = cast<StructType>(PTy->getElementType());
+    StructType *ST = cast<StructType>(PTy->getPointerElementType());
 
     unsigned AS = PTy->getAddressSpace();
     PHINode *NewPN =
@@ -1398,7 +1398,7 @@ static GlobalVariable *PerformHeapAllocSRoA(GlobalVariable *GV, CallInst *CI,
     // Insert a store of null into each global.
     for (unsigned i = 0, e = FieldGlobals.size(); i != e; ++i) {
       PointerType *PT = cast<PointerType>(FieldGlobals[i]->getType());
-      Constant *Null = Constant::getNullValue(PT->getElementType());
+      Constant *Null = Constant::getNullValue(PT->getPointerElementType());
       new StoreInst(Null, FieldGlobals[i], SI);
     }
     // Erase the original store.
@@ -1583,7 +1583,7 @@ static bool optimizeOnceStoredGlobal(GlobalVariable *GV, Value *StoredOnceVal,
 /// boolean and select between the two values whenever it is used.  This exposes
 /// the values to other scalar optimizations.
 static bool TryToShrinkGlobalToBoolean(GlobalVariable *GV, Constant *OtherVal) {
-  Type *GVElType = GV->getType()->getElementType();
+  Type *GVElType = GV->getType()->getPointerElementType();
 
   // If GVElType is already i1, it is already shrunk.  If the type of the GV is
   // an FP value, pointer or vector, don't do this optimization because a select
@@ -1879,7 +1879,7 @@ bool GlobalOpt::processInternalGlobal(GlobalVariable *GV,
   // If the global is in different address space, don't bring it to stack.
   if (!GS.HasMultipleAccessingFunctions &&
       GS.AccessingFunction &&
-      GV->getType()->getElementType()->isSingleValueType() &&
+      GV->getType()->getPointerElementType()->isSingleValueType() &&
       GV->getType()->getAddressSpace() == 0 &&
       !GV->isExternallyInitialized() &&
       allNonInstructionUsersCanBeMadeInstructions(GV) &&
@@ -1888,7 +1888,7 @@ bool GlobalOpt::processInternalGlobal(GlobalVariable *GV,
     DEBUG(dbgs() << "LOCALIZING GLOBAL: " << *GV << "\n");
     Instruction &FirstI = const_cast<Instruction&>(*GS.AccessingFunction
                                                    ->getEntryBlock().begin());
-    Type *ElemTy = GV->getType()->getElementType();
+    Type *ElemTy = GV->getType()->getPointerElementType();
     // FIXME: Pass Global's alignment when globals have alignment
     AllocaInst *Alloca = new AllocaInst(ElemTy, nullptr,
                                         GV->getName(), &FirstI);
@@ -2192,7 +2192,7 @@ isSimpleEnoughValueToCommit(Constant *C,
 static bool isSimpleEnoughPointerToCommit(Constant *C) {
   // Conservatively, avoid aggregate types. This is because we don't
   // want to worry about them partially overlapping other stores.
-  if (!cast<PointerType>(C->getType())->getElementType()->isSingleValueType())
+  if (!cast<PointerType>(C->getType())->getPointerElementType()->isSingleValueType())
     return false;
 
   if (GlobalVariable *GV = dyn_cast<GlobalVariable>(C))
@@ -2459,7 +2459,7 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
           // stored value.
           Ptr = CE->getOperand(0);
 
-          Type *NewTy = cast<PointerType>(Ptr->getType())->getElementType();
+          Type *NewTy = cast<PointerType>(Ptr->getType())->getPointerElementType();
 
           // In order to push the bitcast onto the stored value, a bitcast
           // from NewTy to Val's type must be legal.  If it's not, we can try
@@ -2569,7 +2569,7 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
         DEBUG(dbgs() << "Found an array alloca. Can not evaluate.\n");
         return false;  // Cannot handle array allocs.
       }
-      Type *Ty = AI->getType()->getElementType();
+      Type *Ty = AI->getType()->getPointerElementType();
       AllocaTmps.push_back(
           make_unique<GlobalVariable>(Ty, false, GlobalValue::InternalLinkage,
                                       UndefValue::get(Ty), AI->getName()));
@@ -2627,7 +2627,7 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
           Value *PtrArg = getVal(II->getArgOperand(1));
           Value *Ptr = PtrArg->stripPointerCasts();
           if (GlobalVariable *GV = dyn_cast<GlobalVariable>(Ptr)) {
-            Type *ElemTy = cast<PointerType>(GV->getType())->getElementType();
+            Type *ElemTy = cast<PointerType>(GV->getType())->getPointerElementType();
             if (!Size->isAllOnesValue() &&
                 Size->getValue().getLimitedValue() >=
                     DL.getTypeStoreSize(ElemTy)) {

@@ -1833,7 +1833,7 @@ static Value *genLoopLimit(PHINode *IndVar, const SCEV *IVCount, Loop *L,
     // We could handle pointer IVs other than i8*, but we need to compensate for
     // gep index scaling. See canExpandBackedgeTakenCount comments.
     assert(SE->getSizeOfExpr(IntegerType::getInt64Ty(IndVar->getContext()),
-             cast<PointerType>(GEPBase->getType())->getElementType())->isOne()
+             cast<PointerType>(GEPBase->getType())->getPointerElementType())->isOne()
            && "unit stride pointer IV must be i8*");
 
     IRBuilder<> Builder(L->getLoopPreheader()->getTerminator());

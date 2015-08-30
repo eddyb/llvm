@@ -749,7 +749,11 @@ uint64_t DataLayout::getIndexedOffset(Type *ptrTy,
       Ty = STy->getElementType(FieldNo);
     } else {
       // Update Ty to refer to current element
-      Ty = cast<SequentialType>(Ty)->getElementType();
+      if (auto *PtrTy = dyn_cast<PointerType>(Ty)) {
+        Ty = PtrTy->getPointerElementType();
+      } else {
+        Ty = cast<SequentialType>(Ty)->getElementType();
+      }
 
       // Get the array index and the size of each array element.
       if (int64_t arrayIdx = cast<ConstantInt>(Indices[CurIDX])->getSExtValue())
@@ -764,7 +768,7 @@ uint64_t DataLayout::getIndexedOffset(Type *ptrTy,
 /// global.  This includes an explicitly requested alignment (if the global
 /// has one).
 unsigned DataLayout::getPreferredAlignment(const GlobalVariable *GV) const {
-  Type *ElemType = GV->getType()->getElementType();
+  Type *ElemType = GV->getType()->getPointerElementType();
   unsigned Alignment = getPrefTypeAlignment(ElemType);
   unsigned GVAlignment = GV->getAlignment();
   if (GVAlignment >= Alignment) {

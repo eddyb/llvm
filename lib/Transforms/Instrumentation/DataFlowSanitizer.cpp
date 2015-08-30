@@ -134,7 +134,7 @@ namespace {
 
 StringRef GetGlobalTypeString(const GlobalValue &G) {
   // Types of GlobalVariables are always pointer types.
-  Type *GType = G.getType()->getElementType();
+  Type *GType = G.getType()->getPointerElementType();
   // For now we support blacklisting struct types only.
   if (StructType *SGType = dyn_cast<StructType>(GType)) {
     if (!SGType->isLiteral())
@@ -166,7 +166,7 @@ class DFSanABIList {
     if (isIn(*GA.getParent(), Category))
       return true;
 
-    if (isa<FunctionType>(GA.getType()->getElementType()))
+    if (isa<FunctionType>(GA.getType()->getPointerElementType()))
       return SCL->inSection("fun", GA.getName(), Category);
 
     return SCL->inSection("global", GA.getName(), Category) ||
@@ -406,7 +406,7 @@ FunctionType *DataFlowSanitizer::getCustomFunctionType(FunctionType *T) {
        i != e; ++i) {
     FunctionType *FT;
     if (isa<PointerType>(*i) && (FT = dyn_cast<FunctionType>(cast<PointerType>(
-                                     *i)->getElementType()))) {
+                                     *i)->getPointerElementType()))) {
       ArgTypes.push_back(getTrampolineFunctionType(FT)->getPointerTo());
       ArgTypes.push_back(Type::getInt8PtrTy(*Ctx));
     } else {
@@ -1413,7 +1413,7 @@ void DFSanVisitor::visitCallSite(CallSite CS) {
     return;
 
   assert(!(cast<FunctionType>(
-      CS.getCalledValue()->getType()->getPointerElementType())->isVarArg() &&
+      cast<PointerType>(CS.getCalledValue()->getType())->getPointerElementType())->isVarArg() &&
            dyn_cast<InvokeInst>(CS.getInstruction())));
 
   IRBuilder<> IRB(CS.getInstruction());
@@ -1469,7 +1469,7 @@ void DFSanVisitor::visitCallSite(CallSite CS) {
           FunctionType *ParamFT;
           if (isa<PointerType>(T) &&
               (ParamFT = dyn_cast<FunctionType>(
-                   cast<PointerType>(T)->getElementType()))) {
+                   cast<PointerType>(T)->getPointerElementType()))) {
             std::string TName = "dfst";
             TName += utostr(FT->getNumParams() - n);
             TName += "$";
@@ -1532,7 +1532,7 @@ void DFSanVisitor::visitCallSite(CallSite CS) {
   }
 
   FunctionType *FT = cast<FunctionType>(
-      CS.getCalledValue()->getType()->getPointerElementType());
+      cast<PointerType>(CS.getCalledValue()->getType())->getPointerElementType());
   if (DFSF.DFS.getInstrumentedABI() == DataFlowSanitizer::IA_TLS) {
     for (unsigned i = 0, n = FT->getNumParams(); i != n; ++i) {
       IRB.CreateStore(DFSF.getShadow(CS.getArgument(i)),

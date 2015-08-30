@@ -70,8 +70,12 @@ namespace llvm {
     Type *getIndexedType() const {
       if (CurTy.getInt())
         return CurTy.getPointer();
-      CompositeType *CT = cast<CompositeType>(CurTy.getPointer());
-      return CT->getTypeAtIndex(getOperand());
+      if (auto *PtrTy = dyn_cast<PointerType>(CurTy.getPointer())) {
+        return PtrTy->getPointerElementType();
+      } else {
+        CompositeType *CT = cast<CompositeType>(CurTy.getPointer());
+        return CT->getTypeAtIndex(getOperand());
+      }
     }
 
     // This is a non-standard operator->.  It allows you to call methods on the
@@ -86,7 +90,10 @@ namespace llvm {
       } else if (CompositeType *CT =
                      dyn_cast<CompositeType>(CurTy.getPointer())) {
         CurTy.setPointer(CT->getTypeAtIndex(getOperand()));
-      } else {
+      } else if (PointerType *PtrTy =
+                     dyn_cast<PointerType>(CurTy.getPointer())) {
+        CurTy.setPointer(PtrTy->getPointerElementType());
+      }  else {
         CurTy.setPointer(nullptr);
       }
       ++OpIt;

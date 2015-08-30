@@ -1788,8 +1788,8 @@ Constant *ConstantExpr::getAddrSpaceCast(Constant *C, Type *DstTy,
   // bitcasting the pointer type and then converting the address space.
   PointerType *SrcScalarTy = cast<PointerType>(C->getType()->getScalarType());
   PointerType *DstScalarTy = cast<PointerType>(DstTy->getScalarType());
-  Type *DstElemTy = DstScalarTy->getElementType();
-  if (SrcScalarTy->getElementType() != DstElemTy) {
+  Type *DstElemTy = DstScalarTy->getPointerElementType();
+  if (SrcScalarTy->getPointerElementType() != DstElemTy) {
     Type *MidTy = PointerType::get(DstElemTy, SrcScalarTy->getAddressSpace());
     if (VectorType *VT = dyn_cast<VectorType>(DstTy)) {
       // Handle vectors of pointers.
@@ -1965,7 +1965,7 @@ Constant *ConstantExpr::getGetElementPtr(Type *Ty, Constant *C,
                                          ArrayRef<Value *> Idxs, bool InBounds,
                                          Type *OnlyIfReducedTy) {
   if (!Ty)
-    Ty = cast<PointerType>(C->getType()->getScalarType())->getElementType();
+    Ty = cast<PointerType>(C->getType()->getScalarType())->getPointerElementType();
   else
     assert(
         Ty ==

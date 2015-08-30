@@ -257,7 +257,7 @@ SDValue XCoreTargetLowering::getGlobalAddressWrapper(SDValue GA,
   // FIXME there is no actual debug info here
   SDLoc dl(GA);
 
-  if (GV->getType()->getElementType()->isFunctionTy())
+  if (GV->getType()->getPointerElementType()->isFunctionTy())
     return DAG.getNode(XCoreISD::PCRelativeWrapper, dl, MVT::i32, GA);
 
   const auto *GVar = dyn_cast<GlobalVariable>(GV);
@@ -272,7 +272,7 @@ static bool IsSmallObject(const GlobalValue *GV, const XCoreTargetLowering &XTL)
   if (XTL.getTargetMachine().getCodeModel() == CodeModel::Small)
     return true;
 
-  Type *ObjType = GV->getType()->getPointerElementType();
+  Type *ObjType = cast<PointerType>(GV->getType())->getPointerElementType();
   if (!ObjType->isSized())
     return false;
 

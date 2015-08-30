@@ -1550,7 +1550,7 @@ public:
   CallInst *CreateCall(Value *Callee, ArrayRef<Value *> Args,
                        const Twine &Name, MDNode *FPMathTag = nullptr) {
     PointerType *PTy = cast<PointerType>(Callee->getType());
-    FunctionType *FTy = cast<FunctionType>(PTy->getElementType());
+    FunctionType *FTy = cast<FunctionType>(PTy->getPointerElementType());
     return CreateCall(FTy, Callee, Args, Name, FPMathTag);
   }
 
@@ -1679,7 +1679,7 @@ public:
     Value *RHS_int = CreatePtrToInt(RHS, Type::getInt64Ty(Context));
     Value *Difference = CreateSub(LHS_int, RHS_int);
     return CreateExactSDiv(Difference,
-                           ConstantExpr::getSizeOf(ArgType->getElementType()),
+                           ConstantExpr::getSizeOf(ArgType->getPointerElementType()),
                            Name);
   }
 
