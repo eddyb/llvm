@@ -1095,7 +1095,7 @@ struct MemorySanitizerVisitor : public InstVisitor<MemorySanitizerVisitor> {
         }
         unsigned Size =
             FArg.hasByValAttr()
-                ? DL.getTypeAllocSize(FArg.getType()->getPointerElementType())
+                ? DL.getTypeAllocSize(cast<PointerType>(FArg.getType())->getPointerElementType())
                 : DL.getTypeAllocSize(FArg.getType());
         if (A == &FArg) {
           bool Overflow = ArgOffset + Size > kParamTLSSize;
@@ -1106,7 +1106,7 @@ struct MemorySanitizerVisitor : public InstVisitor<MemorySanitizerVisitor> {
             // Figure out maximal valid memcpy alignment.
             unsigned ArgAlign = FArg.getParamAlignment();
             if (ArgAlign == 0) {
-              Type *EltType = A->getType()->getPointerElementType();
+              Type *EltType = cast<PointerType>(A->getType())->getPointerElementType();
               ArgAlign = DL.getABITypeAlignment(EltType);
             }
             if (Overflow) {
@@ -2477,7 +2477,7 @@ struct MemorySanitizerVisitor : public InstVisitor<MemorySanitizerVisitor> {
       if (CS.paramHasAttr(i + 1, Attribute::ByVal)) {
         assert(A->getType()->isPointerTy() &&
                "ByVal argument is not a pointer!");
-        Size = DL.getTypeAllocSize(A->getType()->getPointerElementType());
+        Size = DL.getTypeAllocSize(cast<PointerType>(A->getType())->getPointerElementType());
         if (ArgOffset + Size > kParamTLSSize) break;
         unsigned ParamAlignment = CS.getParamAlignment(i + 1);
         unsigned Alignment = std::min(ParamAlignment, kShadowTLSAlignment);
@@ -2815,7 +2815,7 @@ struct VarArgAMD64Helper : public VarArgHelper {
       if (IsByVal) {
         // ByVal arguments always go to the overflow area.
         assert(A->getType()->isPointerTy());
-        Type *RealTy = A->getType()->getPointerElementType();
+        Type *RealTy = cast<PointerType>(A->getType())->getPointerElementType();
         uint64_t ArgSize = DL.getTypeAllocSize(RealTy);
         Value *Base = getShadowPtrForVAArgument(RealTy, IRB, OverflowOffset);
         OverflowOffset += RoundUpToAlignment(ArgSize, 8);

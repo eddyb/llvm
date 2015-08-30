@@ -1743,7 +1743,7 @@ bool CodeGenPrepare::optimizeCallInst(CallInst *CI, bool& ModifiedDT) {
       GlobalVariable *GV;
       if ((GV = dyn_cast<GlobalVariable>(Val)) && GV->hasUniqueInitializer() &&
           !GV->hasSection() && GV->getAlignment() < PrefAlign &&
-          DL->getTypeAllocSize(GV->getType()->getElementType()) >=
+          DL->getTypeAllocSize(GV->getType()->getPointerElementType()) >=
               MinSize + Offset2)
         GV->setAlignment(PrefAlign);
     }
@@ -3573,7 +3573,7 @@ isProfitableToFoldIntoAddressingMode(Instruction *I, ExtAddrMode &AMBefore,
     PointerType *AddrTy = dyn_cast<PointerType>(Address->getType());
     if (!AddrTy)
       return false;
-    Type *AddressAccessTy = AddrTy->getElementType();
+    Type *AddressAccessTy = AddrTy->getPointerElementType();
     unsigned AS = AddrTy->getAddressSpace();
 
     // Do a match against the root of this address, ignoring profitability. This

@@ -109,20 +109,19 @@ static Constant *FoldBitCast(Constant *V, Type *DestTy) {
   if (PointerType *PTy = dyn_cast<PointerType>(V->getType()))
     if (PointerType *DPTy = dyn_cast<PointerType>(DestTy))
       if (PTy->getAddressSpace() == DPTy->getAddressSpace()
-          && PTy->getElementType()->isSized()) {
+          && PTy->getPointerElementType()->isSized()) {
         SmallVector<Value*, 8> IdxList;
         Value *Zero =
           Constant::getNullValue(Type::getInt32Ty(DPTy->getContext()));
         IdxList.push_back(Zero);
-        Type *ElTy = PTy->getElementType();
-        while (ElTy != DPTy->getElementType()) {
+        Type *ElTy = PTy->getPointerElementType();
+        while (ElTy != DPTy->getPointerElementType()) {
           if (StructType *STy = dyn_cast<StructType>(ElTy)) {
             if (STy->getNumElements() == 0) break;
             ElTy = STy->getElementType(0);
             IdxList.push_back(Zero);
           } else if (SequentialType *STy = 
                      dyn_cast<SequentialType>(ElTy)) {
-            if (ElTy->isPointerTy()) break;  // Can't index into pointers!
             ElTy = STy->getElementType();
             IdxList.push_back(Zero);
           } else {
@@ -130,9 +129,9 @@ static Constant *FoldBitCast(Constant *V, Type *DestTy) {
           }
         }
 
-        if (ElTy == DPTy->getElementType())
+        if (ElTy == DPTy->getPointerElementType())
           // This GEP is inbounds because all indices are zero.
-          return ConstantExpr::getInBoundsGetElementPtr(PTy->getElementType(),
+          return ConstantExpr::getInBoundsGetElementPtr(PTy->getPointerElementType(),
                                                         V, IdxList);
       }
 
@@ -381,7 +380,7 @@ static Constant *getFoldedSizeOf(Type *Ty, Type *DestTy,
   // Pointer size doesn't depend on the pointee type, so canonicalize them
   // to an arbitrary pointee.
   if (PointerType *PTy = dyn_cast<PointerType>(Ty))
-    if (!PTy->getElementType()->isIntegerTy(1))
+    if (!PTy->getPointerElementType()->isIntegerTy(1))
       return
         getFoldedSizeOf(PointerType::get(IntegerType::get(PTy->getContext(), 1),
                                          PTy->getAddressSpace()),
@@ -446,7 +445,7 @@ static Constant *getFoldedAlignOf(Type *Ty, Type *DestTy,
   // Pointer alignment doesn't depend on the pointee type, so canonicalize them
   // to an arbitrary pointee.
   if (PointerType *PTy = dyn_cast<PointerType>(Ty))
-    if (!PTy->getElementType()->isIntegerTy(1))
+    if (!PTy->getPointerElementType()->isIntegerTy(1))
       return
         getFoldedAlignOf(PointerType::get(IntegerType::get(PTy->getContext(),
                                                            1),
@@ -2002,10 +2001,6 @@ static bool isInBoundsIndices(ArrayRef<IndexTy> Idxs) {
 /// \brief Test whether a given ConstantInt is in-range for a SequentialType.
 static bool isIndexInRangeOfSequentialType(SequentialType *STy,
                                            const ConstantInt *CI) {
-  // And indices are valid when indexing along a pointer
-  if (isa<PointerType>(STy))
-    return true;
-
   uint64_t NumElements = 0;
   // Determine the number of elements in our sequential type.
   if (auto *ATy = dyn_cast<ArrayType>(STy))
@@ -2042,7 +2037,7 @@ static Constant *ConstantFoldGetElementPtrImpl(Type *PointeeTy, Constant *C,
   if (isa<UndefValue>(C)) {
     PointerType *Ptr = cast<PointerType>(C->getType());
     Type *Ty = GetElementPtrInst::getIndexedType(
-        cast<PointerType>(Ptr->getScalarType())->getElementType(), Idxs);
+        cast<PointerType>(Ptr->getScalarType())->getPointerElementType(), Idxs);
     assert(Ty && "Invalid indices for GEP!");
     return UndefValue::get(PointerType::get(Ty, Ptr->getAddressSpace()));
   }
@@ -2057,7 +2052,7 @@ static Constant *ConstantFoldGetElementPtrImpl(Type *PointeeTy, Constant *C,
     if (isNull) {
       PointerType *Ptr = cast<PointerType>(C->getType());
       Type *Ty = GetElementPtrInst::getIndexedType(
-          cast<PointerType>(Ptr->getScalarType())->getElementType(), Idxs);
+          cast<PointerType>(Ptr->getScalarType())->getPointerElementType(), Idxs);
       assert(Ty && "Invalid indices for GEP!");
       return ConstantPointerNull::get(PointerType::get(Ty,
                                                        Ptr->getAddressSpace()));
@@ -2096,9 +2091,13 @@ static Constant *ConstantFoldGetElementPtrImpl(Type *PointeeTy, Constant *C,
       bool PerformFold = false;
       if (Idx0->isNullValue())
         PerformFold = true;
-      else if (SequentialType *STy = dyn_cast_or_null<SequentialType>(LastTy))
-        if (ConstantInt *CI = dyn_cast<ConstantInt>(Idx0))
+      else if (ConstantInt *CI = dyn_cast<ConstantInt>(Idx0)) {
+        if (SequentialType *STy = dyn_cast_or_null<SequentialType>(LastTy)) {
           PerformFold = isIndexInRangeOfSequentialType(STy, CI);
+        } else if (isa<PointerType>(LastTy)) {
+          PerformFold = true;
+        }
+      }
 
       if (PerformFold) {
         SmallVector<Value*, 16> NewIndices;
@@ -2151,9 +2150,9 @@ static Constant *ConstantFoldGetElementPtrImpl(Type *PointeeTy, Constant *C,
       PointerType *DstPtrTy = dyn_cast<PointerType>(CE->getType());
       if (SrcPtrTy && DstPtrTy) {
         ArrayType *SrcArrayTy =
-          dyn_cast<ArrayType>(SrcPtrTy->getElementType());
+          dyn_cast<ArrayType>(SrcPtrTy->getPointerElementType());
         ArrayType *DstArrayTy =
-          dyn_cast<ArrayType>(DstPtrTy->getElementType());
+          dyn_cast<ArrayType>(DstPtrTy->getPointerElementType());
         if (SrcArrayTy && DstArrayTy
             && SrcArrayTy->getElementType() == DstArrayTy->getElementType()
             && SrcPtrTy->getAddressSpace() == DstPtrTy->getAddressSpace())
@@ -2176,7 +2175,7 @@ static Constant *ConstantFoldGetElementPtrImpl(Type *PointeeTy, Constant *C,
       if (isa<ArrayType>(Ty) || isa<VectorType>(Ty))
         if (CI->getSExtValue() > 0 &&
             !isIndexInRangeOfSequentialType(cast<SequentialType>(Ty), CI)) {
-          if (isa<SequentialType>(Prev)) {
+          if (isa<SequentialType>(Prev) || isa<PointerType>(Prev)) {
             // It's out of range, but we can factor it into the prior
             // dimension.
             NewIdxs.resize(Idxs.size());
@@ -2241,7 +2240,7 @@ Constant *llvm::ConstantFoldGetElementPtr(Constant *C,
                                           bool inBounds,
                                           ArrayRef<Constant *> Idxs) {
   return ConstantFoldGetElementPtrImpl(
-      cast<PointerType>(C->getType()->getScalarType())->getElementType(), C,
+      cast<PointerType>(C->getType()->getScalarType())->getPointerElementType(), C,
       inBounds, Idxs);
 }
 
@@ -2249,7 +2248,7 @@ Constant *llvm::ConstantFoldGetElementPtr(Constant *C,
                                           bool inBounds,
                                           ArrayRef<Value *> Idxs) {
   return ConstantFoldGetElementPtrImpl(
-      cast<PointerType>(C->getType()->getScalarType())->getElementType(), C,
+      cast<PointerType>(C->getType()->getScalarType())->getPointerElementType(), C,
       inBounds, Idxs);
 }
 

@@ -1205,7 +1205,7 @@ static bool isSafePHIToSpeculate(PHINode &PN) {
 static void speculatePHINodeLoads(PHINode &PN) {
   DEBUG(dbgs() << "    original: " << PN << "\n");
 
-  Type *LoadTy = cast<PointerType>(PN.getType())->getElementType();
+  Type *LoadTy = cast<PointerType>(PN.getType())->getPointerElementType();
   IRBuilderTy PHIBuilder(&PN);
   PHINode *NewPN = PHIBuilder.CreatePHI(LoadTy, PN.getNumIncomingValues(),
                                         PN.getName() + ".sroa.speculated");
@@ -1479,7 +1479,7 @@ static Value *getNaturalGEPWithOffset(IRBuilderTy &IRB, const DataLayout &DL,
   if (Ty == IRB.getInt8PtrTy(Ty->getAddressSpace()) && TargetTy->isIntegerTy(8))
     return nullptr;
 
-  Type *ElementTy = Ty->getElementType();
+  Type *ElementTy = Ty->getPointerElementType();
   if (!ElementTy->isSized())
     return nullptr; // We can't GEP through an unsized element.
   APInt ElementSize(Offset.getBitWidth(), DL.getTypeAllocSize(ElementTy));
@@ -1527,7 +1527,7 @@ static Value *getAdjustedPtr(IRBuilderTy &IRB, const DataLayout &DL, Value *Ptr,
   Value *Int8Ptr = nullptr;
   APInt Int8PtrOffset(Offset.getBitWidth(), 0);
 
-  Type *TargetTy = PointerTy->getPointerElementType();
+  Type *TargetTy = cast<PointerType>(PointerTy)->getPointerElementType();
 
   do {
     // First fold any existing GEPs into the offset.
@@ -1758,7 +1758,7 @@ static bool isVectorPromotionViableForSlice(Partition &P, const Slice &S,
     if (II->getIntrinsicID() != Intrinsic::lifetime_start &&
         II->getIntrinsicID() != Intrinsic::lifetime_end)
       return false;
-  } else if (U->get()->getType()->getPointerElementType()->isStructTy()) {
+  } else if (cast<PointerType>(U->get()->getType())->getPointerElementType()->isStructTy()) {
     // Disable vector promotion when there are loads or stores of an FCA.
     return false;
   } else if (LoadInst *LI = dyn_cast<LoadInst>(U->getUser())) {
@@ -3220,10 +3220,6 @@ static Type *getTypePartition(const DataLayout &DL, Type *Ty, uint64_t Offset,
     return nullptr;
 
   if (SequentialType *SeqTy = dyn_cast<SequentialType>(Ty)) {
-    // We can't partition pointers...
-    if (SeqTy->isPointerTy())
-      return nullptr;
-
     Type *ElementTy = SeqTy->getElementType();
     uint64_t ElementSize = DL.getTypeAllocSize(ElementTy);
     uint64_t NumSkippedElements = Offset / ElementSize;

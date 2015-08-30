@@ -2293,7 +2293,7 @@ bool ARMFastISel::SelectCall(const Instruction *I,
   // TODO: Avoid some calling conventions?
 
   PointerType *PT = cast<PointerType>(CS.getCalledValue()->getType());
-  FunctionType *FTy = cast<FunctionType>(PT->getElementType());
+  FunctionType *FTy = cast<FunctionType>(PT->getPointerElementType());
   bool isVarArg = FTy->isVarArg();
 
   // Handle *simple* calls for now.

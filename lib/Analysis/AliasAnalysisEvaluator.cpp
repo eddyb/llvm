@@ -189,12 +189,12 @@ bool AAEval::runOnFunction(Function &F) {
   for (SetVector<Value *>::iterator I1 = Pointers.begin(), E = Pointers.end();
        I1 != E; ++I1) {
     uint64_t I1Size = MemoryLocation::UnknownSize;
-    Type *I1ElTy = cast<PointerType>((*I1)->getType())->getElementType();
+    Type *I1ElTy = cast<PointerType>((*I1)->getType())->getPointerElementType();
     if (I1ElTy->isSized()) I1Size = DL.getTypeStoreSize(I1ElTy);
 
     for (SetVector<Value *>::iterator I2 = Pointers.begin(); I2 != I1; ++I2) {
       uint64_t I2Size = MemoryLocation::UnknownSize;
-      Type *I2ElTy =cast<PointerType>((*I2)->getType())->getElementType();
+      Type *I2ElTy =cast<PointerType>((*I2)->getType())->getPointerElementType();
       if (I2ElTy->isSized()) I2Size = DL.getTypeStoreSize(I2ElTy);
 
       switch (AA.alias(*I1, I1Size, *I2, I2Size)) {
@@ -289,7 +289,7 @@ bool AAEval::runOnFunction(Function &F) {
     for (SetVector<Value *>::iterator V = Pointers.begin(), Ve = Pointers.end();
          V != Ve; ++V) {
       uint64_t Size = MemoryLocation::UnknownSize;
-      Type *ElTy = cast<PointerType>((*V)->getType())->getElementType();
+      Type *ElTy = cast<PointerType>((*V)->getType())->getPointerElementType();
       if (ElTy->isSized()) Size = DL.getTypeStoreSize(ElTy);
 
       switch (AA.getModRefInfo(*C, *V, Size)) {

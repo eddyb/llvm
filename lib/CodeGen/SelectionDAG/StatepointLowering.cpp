@@ -849,7 +849,7 @@ void SelectionDAGBuilder::visitGCResult(const CallInst &CI) {
     PointerType *CalleeType = cast<PointerType>(
         ImmutableStatepoint(I).getCalledValue()->getType());
     Type *RetTy =
-        cast<FunctionType>(CalleeType->getElementType())->getReturnType();
+        cast<FunctionType>(CalleeType->getPointerElementType())->getReturnType();
     SDValue CopyFromReg = getCopyFromRegs(I, RetTy);
 
     assert(CopyFromReg.getNode());

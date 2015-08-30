@@ -355,8 +355,6 @@ public:
   inline unsigned getVectorNumElements() const;
   Type *getVectorElementType() const { return getSequentialElementType(); }
 
-  Type *getPointerElementType() const { return getSequentialElementType(); }
-
   /// \brief Get the address space of this pointer or pointer vector type.
   inline unsigned getPointerAddressSpace() const;
 

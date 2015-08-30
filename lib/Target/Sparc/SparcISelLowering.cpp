@@ -1048,7 +1048,7 @@ SparcTargetLowering::getSRetArgSize(SelectionDAG &DAG, SDValue Callee) const
   // but since it is not part of the function type, any check will misfire.
 
   PointerType *Ty = cast<PointerType>(CalleeFn->arg_begin()->getType());
-  Type *ElementTy = Ty->getElementType();
+  Type *ElementTy = Ty->getPointerElementType();
   return DAG.getDataLayout().getTypeAllocSize(ElementTy);
 }
 

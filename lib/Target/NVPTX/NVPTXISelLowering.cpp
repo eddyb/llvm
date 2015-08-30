@@ -988,7 +988,7 @@ std::string NVPTXTargetLowering::getPrototype(
     }
     auto *PTy = dyn_cast<PointerType>(Ty);
     assert(PTy && "Param with byval attribute should be a pointer type");
-    Type *ETy = PTy->getElementType();
+    Type *ETy = PTy->getPointerElementType();
 
     unsigned align = Outs[OIdx].Flags.getByValAlign();
     unsigned sz = DL.getTypeAllocSize(ETy);
@@ -1325,7 +1325,7 @@ SDValue NVPTXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     SmallVector<uint64_t, 16> Offsets;
     auto *PTy = dyn_cast<PointerType>(Args[i].Ty);
     assert(PTy && "Type of a byval parameter should be pointer");
-    ComputePTXValueVTs(*this, DAG.getDataLayout(), PTy->getElementType(),
+    ComputePTXValueVTs(*this, DAG.getDataLayout(), PTy->getPointerElementType(),
                        vtparts, &Offsets, 0);
 
     // declare .param .align <align> .b8 .param<n>[<size>];
@@ -2041,7 +2041,7 @@ bool llvm::isImageOrSamplerVal(const Value *arg, const Module *context) {
   if (!context)
     return false;
 
-  auto *STy = dyn_cast<StructType>(PTy->getElementType());
+  auto *STy = dyn_cast<StructType>(PTy->getPointerElementType());
   const std::string TypeName = STy && !STy->isLiteral() ? STy->getName() : "";
 
   return std::find(std::begin(specialTypes), std::end(specialTypes),

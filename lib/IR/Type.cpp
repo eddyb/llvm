@@ -696,13 +696,12 @@ PointerType *PointerType::get(Type *EltTy, unsigned AddressSpace) {
 
 
 PointerType::PointerType(Type *E, unsigned AddrSpace)
-  : SequentialType(PointerTyID, E) {
-#ifndef NDEBUG
-  const unsigned oldNCT = NumContainedTys;
-#endif
+  : Type(E->getContext(), PointerTyID), PointeeType(E) {
+  ContainedTys = &PointeeType;
+  NumContainedTys = 1;
   setSubclassData(AddrSpace);
   // Check for miscompile. PR11652.
-  assert(oldNCT == NumContainedTys && "bitfield written out of bounds?");
+  assert(NumContainedTys == 1 && "bitfield written out of bounds?");
 }
 
 PointerType *Type::getPointerTo(unsigned addrs) const {

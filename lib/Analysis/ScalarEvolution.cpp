@@ -387,7 +387,7 @@ bool SCEVUnknown::isSizeOf(Type *&AllocTy) const {
           if (ConstantInt *CI = dyn_cast<ConstantInt>(CE->getOperand(1)))
             if (CI->isOne()) {
               AllocTy = cast<PointerType>(CE->getOperand(0)->getType())
-                                 ->getElementType();
+                                 ->getPointerElementType();
               return true;
             }
 
@@ -401,7 +401,7 @@ bool SCEVUnknown::isAlignOf(Type *&AllocTy) const {
         if (CE->getOpcode() == Instruction::GetElementPtr &&
             CE->getOperand(0)->isNullValue()) {
           Type *Ty =
-            cast<PointerType>(CE->getOperand(0)->getType())->getElementType();
+            cast<PointerType>(CE->getOperand(0)->getType())->getPointerElementType();
           if (StructType *STy = dyn_cast<StructType>(Ty))
             if (!STy->isPacked() &&
                 CE->getNumOperands() == 3 &&
@@ -428,7 +428,7 @@ bool SCEVUnknown::isOffsetOf(Type *&CTy, Constant *&FieldNo) const {
             CE->getOperand(0)->isNullValue() &&
             CE->getOperand(1)->isNullValue()) {
           Type *Ty =
-            cast<PointerType>(CE->getOperand(0)->getType())->getElementType();
+            cast<PointerType>(CE->getOperand(0)->getType())->getPointerElementType();
           // Ignore vector types here so that ScalarEvolutionExpander doesn't
           // emit getelementptrs that index into vectors.
           if (Ty->isStructTy() || Ty->isArrayTy()) {
@@ -2965,7 +2965,12 @@ ScalarEvolution::getGEPExpr(Type *PointeeType, const SCEV *BaseExpr,
       CurTy = STy->getTypeAtIndex(Index);
     } else {
       // Update CurTy to its element type.
-      CurTy = cast<SequentialType>(CurTy)->getElementType();
+      if (auto *PtrTy = dyn_cast<PointerType>(CurTy)) {
+        CurTy = PtrTy->getPointerElementType();
+      } else {
+        CurTy = cast<SequentialType>(CurTy)->getElementType();
+      }
+
       // For an array, add the element offset, explicitly scaled.
       const SCEV *ElementSize = getSizeOfExpr(IntPtrTy, CurTy);
       // Getelementptr indices are signed.
@@ -4089,7 +4094,7 @@ const SCEV *ScalarEvolution::createNodeForSelectOrPHI(Instruction *I,
 const SCEV *ScalarEvolution::createNodeForGEP(GEPOperator *GEP) {
   Value *Base = GEP->getOperand(0);
   // Don't attempt to analyze GEPs over unsized objects.
-  if (!Base->getType()->getPointerElementType()->isSized())
+  if (!cast<PointerType>(Base->getType())->getPointerElementType()->isSized())
     return getUnknown(GEP);
 
   SmallVector<const SCEV *, 4> IndexExprs;
@@ -6188,10 +6193,10 @@ static Constant *BuildConstantFromSCEV(const SCEV *V) {
             return nullptr;
 
           if (PointerType *PTy = dyn_cast<PointerType>(C->getType())) {
-            if (PTy->getElementType()->isStructTy())
+            if (PTy->getPointerElementType()->isStructTy())
               C2 = ConstantExpr::getIntegerCast(
                   C2, Type::getInt32Ty(C->getContext()), true);
-            C = ConstantExpr::getGetElementPtr(PTy->getElementType(), C, C2);
+            C = ConstantExpr::getGetElementPtr(PTy->getPointerElementType(), C, C2);
           } else
             C = ConstantExpr::getAdd(C, C2);
         }

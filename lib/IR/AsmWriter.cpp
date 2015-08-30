@@ -504,7 +504,7 @@ void TypePrinting::print(Type *Ty, raw_ostream &OS) {
   }
   case Type::PointerTyID: {
     PointerType *PTy = cast<PointerType>(Ty);
-    print(PTy->getElementType(), OS);
+    print(PTy->getPointerElementType(), OS);
     if (unsigned AddressSpace = PTy->getAddressSpace())
       OS << " addrspace(" << AddressSpace << ')';
     OS << '*';
@@ -2416,7 +2416,7 @@ void AssemblyWriter::printGlobal(const GlobalVariable *GV) {
     Out << "addrspace(" << AddressSpace << ") ";
   if (GV->isExternallyInitialized()) Out << "externally_initialized ";
   Out << (GV->isConstant() ? "constant " : "global ");
-  TypePrinter.print(GV->getType()->getElementType(), Out);
+  TypePrinter.print(GV->getType()->getPointerElementType(), Out);
 
   if (GV->hasInitializer()) {
     Out << ' ';

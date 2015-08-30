@@ -3000,7 +3000,12 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
 
       Ty = StTy->getElementType(Field);
     } else {
-      Ty = cast<SequentialType>(Ty)->getElementType();
+      if (auto *PtrTy = dyn_cast<PointerType>(Ty)) {
+        Ty = PtrTy->getPointerElementType();
+      } else {
+        Ty = cast<SequentialType>(Ty)->getElementType();
+      }
+
       MVT PtrTy =
           DAG.getTargetLoweringInfo().getPointerTy(DAG.getDataLayout(), AS);
       unsigned PtrSize = PtrTy.getSizeInBits();
@@ -5340,7 +5345,7 @@ void SelectionDAGBuilder::LowerCallTo(ImmutableCallSite CS, SDValue Callee,
                                       bool isTailCall,
                                       const BasicBlock *EHPadBB) {
   PointerType *PT = cast<PointerType>(CS.getCalledValue()->getType());
-  FunctionType *FTy = cast<FunctionType>(PT->getElementType());
+  FunctionType *FTy = cast<FunctionType>(PT->getPointerElementType());
   Type *RetTy = FTy->getReturnType();
 
   TargetLowering::ArgListTy Args;
@@ -5956,7 +5961,7 @@ public:
       llvm::PointerType *PtrTy = dyn_cast<PointerType>(OpTy);
       if (!PtrTy)
         report_fatal_error("Indirect operand for inline asm not a pointer!");
-      OpTy = PtrTy->getElementType();
+      OpTy = PtrTy->getPointerElementType();
     }
 
     // Look for vector wrapped in a struct. e.g. { <16 x i8> }.
@@ -7055,7 +7060,7 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
     ComputeValueVTs(*this, DL, Args[i].Ty, ValueVTs);
     Type *FinalType = Args[i].Ty;
     if (Args[i].isByVal)
-      FinalType = cast<PointerType>(Args[i].Ty)->getElementType();
+      FinalType = cast<PointerType>(Args[i].Ty)->getPointerElementType();
     bool NeedsRegBlock = functionArgumentNeedsConsecutiveRegisters(
         FinalType, CLI.CallConv, CLI.IsVarArg);
     for (unsigned Value = 0, NumValues = ValueVTs.size(); Value != NumValues;
@@ -7088,7 +7093,7 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
       }
       if (Args[i].isByVal || Args[i].isInAlloca) {
         PointerType *Ty = cast<PointerType>(Args[i].Ty);
-        Type *ElementTy = Ty->getElementType();
+        Type *ElementTy = Ty->getPointerElementType();
         Flags.setByValSize(DL.getTypeAllocSize(ElementTy));
         // For ByVal, alignment should come from FE.  BE will guess if this
         // info is not there but there are cases it cannot get right.
@@ -7329,7 +7334,7 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
     unsigned PartBase = 0;
     Type *FinalType = I->getType();
     if (F.getAttributes().hasAttribute(Idx, Attribute::ByVal))
-      FinalType = cast<PointerType>(FinalType)->getElementType();
+      FinalType = cast<PointerType>(FinalType)->getPointerElementType();
     bool NeedsRegBlock = TLI->functionArgumentNeedsConsecutiveRegisters(
         FinalType, F.getCallingConv(), F.isVarArg());
     for (unsigned Value = 0, NumValues = ValueVTs.size();
@@ -7365,7 +7370,7 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
       }
       if (Flags.isByVal() || Flags.isInAlloca()) {
         PointerType *Ty = cast<PointerType>(I->getType());
-        Type *ElementTy = Ty->getElementType();
+        Type *ElementTy = Ty->getPointerElementType();
         Flags.setByValSize(DL.getTypeAllocSize(ElementTy));
         // For ByVal, alignment should be passed from FE.  BE will guess if
         // this info is not there but there are cases it cannot get right.

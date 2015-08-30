@@ -471,7 +471,7 @@ void Verifier::visitGlobalValue(const GlobalValue &GV) {
 
 void Verifier::visitGlobalVariable(const GlobalVariable &GV) {
   if (GV.hasInitializer()) {
-    Assert(GV.getInitializer()->getType() == GV.getType()->getElementType(),
+    Assert(GV.getInitializer()->getType() == GV.getType()->getPointerElementType(),
            "Global variable initializer type does not match global "
            "variable type!",
            &GV);
@@ -509,7 +509,7 @@ void Verifier::visitGlobalVariable(const GlobalVariable &GV) {
       if (STy->getNumElements() == 3) {
         Type *ETy = STy->getTypeAtIndex(2);
         Assert(ETy->isPointerTy() &&
-                   cast<PointerType>(ETy)->getElementType()->isIntegerTy(8),
+                   cast<PointerType>(ETy)->getPointerElementType()->isIntegerTy(8),
                "wrong type for intrinsic global variable", &GV);
       }
     }
@@ -1347,7 +1347,7 @@ void Verifier::VerifyParameterAttrs(AttributeSet Attrs, unsigned Idx, Type *Ty,
 
   if (PointerType *PTy = dyn_cast<PointerType>(Ty)) {
     SmallPtrSet<Type*, 4> Visited;
-    if (!PTy->getElementType()->isSized(&Visited)) {
+    if (!PTy->getPointerElementType()->isSized(&Visited)) {
       Assert(!Attrs.hasAttribute(Idx, Attribute::ByVal) &&
                  !Attrs.hasAttribute(Idx, Attribute::InAlloca),
              "Attributes 'byval' and 'inalloca' do not support unsized types!",
@@ -1576,9 +1576,9 @@ void Verifier::VerifyStatepoint(ImmutableCallSite CS) {
 
   const Value *Target = CS.getArgument(2);
   auto *PT = dyn_cast<PointerType>(Target->getType());
-  Assert(PT && PT->getElementType()->isFunctionTy(),
+  Assert(PT && PT->getPointerElementType()->isFunctionTy(),
          "gc.statepoint callee must be of function pointer type", &CI, Target);
-  FunctionType *TargetFuncType = cast<FunctionType>(PT->getElementType());
+  FunctionType *TargetFuncType = cast<FunctionType>(PT->getPointerElementType());
 
   const Value *NumCallArgsV = CS.getArgument(3);
   Assert(isa<ConstantInt>(NumCallArgsV),
@@ -2299,10 +2299,10 @@ void Verifier::VerifyCallSite(CallSite CS) {
          "Called function must be a pointer!", I);
   PointerType *FPTy = cast<PointerType>(CS.getCalledValue()->getType());
 
-  Assert(FPTy->getElementType()->isFunctionTy(),
+  Assert(FPTy->getPointerElementType()->isFunctionTy(),
          "Called function is not pointer to function type!", I);
 
-  Assert(FPTy->getElementType() == CS.getFunctionType(),
+  Assert(FPTy->getPointerElementType() == CS.getFunctionType(),
          "Called function is not the same type as the call!", I);
 
   FunctionType *FTy = CS.getFunctionType();
@@ -2774,7 +2774,7 @@ void Verifier::visitLoadInst(LoadInst &LI) {
 void Verifier::visitStoreInst(StoreInst &SI) {
   PointerType *PTy = dyn_cast<PointerType>(SI.getOperand(1)->getType());
   Assert(PTy, "Store operand must be a pointer.", &SI);
-  Type *ElTy = PTy->getElementType();
+  Type *ElTy = PTy->getPointerElementType();
   Assert(ElTy == SI.getOperand(0)->getType(),
          "Stored value type does not match pointer operand type!", &SI, ElTy);
   Assert(SI.getAlignment() <= Value::MaximumAlignment,
@@ -2833,7 +2833,7 @@ void Verifier::visitAtomicCmpXchgInst(AtomicCmpXchgInst &CXI) {
 
   PointerType *PTy = dyn_cast<PointerType>(CXI.getOperand(0)->getType());
   Assert(PTy, "First cmpxchg operand must be a pointer.", &CXI);
-  Type *ElTy = PTy->getElementType();
+  Type *ElTy = PTy->getPointerElementType();
   Assert(ElTy->isIntegerTy(), "cmpxchg operand must have integer type!", &CXI,
          ElTy);
   checkAtomicMemAccessSize(M, ElTy, &CXI);
@@ -2852,7 +2852,7 @@ void Verifier::visitAtomicRMWInst(AtomicRMWInst &RMWI) {
          "atomicrmw instructions cannot be unordered.", &RMWI);
   PointerType *PTy = dyn_cast<PointerType>(RMWI.getOperand(0)->getType());
   Assert(PTy, "First atomicrmw operand must be a pointer.", &RMWI);
-  Type *ElTy = PTy->getElementType();
+  Type *ElTy = PTy->getPointerElementType();
   Assert(ElTy->isIntegerTy(), "atomicrmw operand must have integer type!",
          &RMWI, ElTy);
   checkAtomicMemAccessSize(M, ElTy, &RMWI);
@@ -3312,7 +3312,7 @@ bool Verifier::VerifyIntrinsicType(Type *Ty,
   case IITDescriptor::Pointer: {
     PointerType *PT = dyn_cast<PointerType>(Ty);
     return !PT || PT->getAddressSpace() != D.Pointer_AddressSpace ||
-           VerifyIntrinsicType(PT->getElementType(), Infos, ArgTys);
+           VerifyIntrinsicType(PT->getPointerElementType(), Infos, ArgTys);
   }
 
   case IITDescriptor::Struct: {
@@ -3400,7 +3400,7 @@ bool Verifier::VerifyIntrinsicType(Type *Ty,
       return true;
     Type * ReferenceType = ArgTys[D.getArgumentNumber()];
     PointerType *ThisArgType = dyn_cast<PointerType>(Ty);
-    return (!ThisArgType || ThisArgType->getElementType() != ReferenceType);
+    return (!ThisArgType || ThisArgType->getPointerElementType() != ReferenceType);
   }
   case IITDescriptor::VecOfPtrsToElt: {
     if (D.getArgumentNumber() >= ArgTys.size())
@@ -3416,7 +3416,7 @@ bool Verifier::VerifyIntrinsicType(Type *Ty,
       dyn_cast<PointerType>(ThisArgVecTy->getVectorElementType());
     if (!ThisArgEltTy)
       return true;
-    return ThisArgEltTy->getElementType() !=
+    return ThisArgEltTy->getPointerElementType() !=
            ReferenceType->getVectorElementType();
   }
   }
@@ -3638,7 +3638,7 @@ void Verifier::visitIntrinsicCallSite(Intrinsic::ID ID, CallSite CS) {
     // Assert that result type matches wrapped callee.
     const Value *Target = StatepointCS.getArgument(2);
     auto *PT = cast<PointerType>(Target->getType());
-    auto *TargetFuncType = cast<FunctionType>(PT->getElementType());
+    auto *TargetFuncType = cast<FunctionType>(PT->getPointerElementType());
     Assert(CS.getType() == TargetFuncType->getReturnType(),
            "gc.result result type does not match wrapped callee", CS);
     break;

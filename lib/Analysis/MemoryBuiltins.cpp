@@ -275,7 +275,7 @@ PointerType *llvm::getMallocType(const CallInst *CI,
 Type *llvm::getMallocAllocatedType(const CallInst *CI,
                                    const TargetLibraryInfo *TLI) {
   PointerType *PT = getMallocType(CI, TLI);
-  return PT ? PT->getElementType() : nullptr;
+  return PT ? PT->getPointerElementType() : nullptr;
 }
 
 /// getMallocArraySize - Returns the array size of a malloc call.  If the
@@ -463,7 +463,7 @@ SizeOffsetType ObjectSizeOffsetVisitor::visitArgument(Argument &A) {
     return unknown();
   }
   PointerType *PT = cast<PointerType>(A.getType());
-  APInt Size(IntTyBits, DL.getTypeAllocSize(PT->getElementType()));
+  APInt Size(IntTyBits, DL.getTypeAllocSize(PT->getPointerElementType()));
   return std::make_pair(align(Size, A.getParamAlignment()), Zero);
 }
 
@@ -552,7 +552,7 @@ SizeOffsetType ObjectSizeOffsetVisitor::visitGlobalVariable(GlobalVariable &GV){
   if (!GV.hasDefinitiveInitializer())
     return unknown();
 
-  APInt Size(IntTyBits, DL.getTypeAllocSize(GV.getType()->getElementType()));
+  APInt Size(IntTyBits, DL.getTypeAllocSize(GV.getType()->getPointerElementType()));
   return std::make_pair(align(Size, GV.getAlignment()), Zero);
 }
 

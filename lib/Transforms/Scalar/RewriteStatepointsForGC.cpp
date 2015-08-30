@@ -1799,7 +1799,7 @@ static void relocationViaAlloca(
       auto InsertClobbersAt = [&](Instruction *IP) {
         for (auto *AI : ToClobber) {
           auto AIType = cast<PointerType>(AI->getType());
-          auto PT = cast<PointerType>(AIType->getElementType());
+          auto PT = cast<PointerType>(AIType->getPointerElementType());
           Constant *CPN = ConstantPointerNull::get(PT);
           StoreInst *Store = new StoreInst(CPN, AI);
           Store->insertBefore(IP);
@@ -2134,7 +2134,7 @@ chainToBasePointerCost(SmallVectorImpl<Instruction*> &Chain,
 
     } else if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(Instr)) {
       // Cost of the address calculation
-      Type *ValTy = GEP->getPointerOperandType()->getPointerElementType();
+      Type *ValTy = cast<PointerType>(GEP->getPointerOperandType())->getPointerElementType();
       Cost += TTI.getAddressComputationCost(ValTy);
 
       // And cost of the GEP itself

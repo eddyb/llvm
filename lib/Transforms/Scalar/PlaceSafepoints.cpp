@@ -762,7 +762,7 @@ InsertSafepointPoll(Instruction *InsertBefore,
   // path call - where we need to insert a safepoint (parsepoint).
 
   auto *F = M->getFunction(GCSafepointPollName);
-  assert(F->getType()->getElementType() ==
+  assert(F->getType()->getPointerElementType() ==
          FunctionType::get(Type::getVoidTy(M->getContext()), false) &&
          "gc.safepoint_poll declared with wrong type");
   assert(!F->empty() && "gc.safepoint_poll must be a non-empty function");

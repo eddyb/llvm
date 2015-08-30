@@ -97,7 +97,7 @@ ARCInstKind llvm::objcarc::GetFunctionClass(const Function *F) {
   if (AI == AE)
     // Argument is a pointer.
     if (PointerType *PTy = dyn_cast<PointerType>(A0->getType())) {
-      Type *ETy = PTy->getElementType();
+      Type *ETy = PTy->getPointerElementType();
       // Argument is i8*.
       if (ETy->isIntegerTy(8))
         return StringSwitch<ARCInstKind>(F->getName())
@@ -122,7 +122,7 @@ ARCInstKind llvm::objcarc::GetFunctionClass(const Function *F) {
 
       // Argument is i8**
       if (PointerType *Pte = dyn_cast<PointerType>(ETy))
-        if (Pte->getElementType()->isIntegerTy(8))
+        if (Pte->getPointerElementType()->isIntegerTy(8))
           return StringSwitch<ARCInstKind>(F->getName())
               .Case("objc_loadWeakRetained", ARCInstKind::LoadWeakRetained)
               .Case("objc_loadWeak", ARCInstKind::LoadWeak)
@@ -134,10 +134,10 @@ ARCInstKind llvm::objcarc::GetFunctionClass(const Function *F) {
   const Argument *A1 = &*AI++;
   if (AI == AE)
     if (PointerType *PTy = dyn_cast<PointerType>(A0->getType()))
-      if (PointerType *Pte = dyn_cast<PointerType>(PTy->getElementType()))
-        if (Pte->getElementType()->isIntegerTy(8))
+      if (PointerType *Pte = dyn_cast<PointerType>(PTy->getPointerElementType()))
+        if (Pte->getPointerElementType()->isIntegerTy(8))
           if (PointerType *PTy1 = dyn_cast<PointerType>(A1->getType())) {
-            Type *ETy1 = PTy1->getElementType();
+            Type *ETy1 = PTy1->getPointerElementType();
             // Second argument is i8*
             if (ETy1->isIntegerTy(8))
               return StringSwitch<ARCInstKind>(F->getName())
@@ -147,7 +147,7 @@ ARCInstKind llvm::objcarc::GetFunctionClass(const Function *F) {
                   .Default(ARCInstKind::CallOrUser);
             // Second argument is i8**.
             if (PointerType *Pte1 = dyn_cast<PointerType>(ETy1))
-              if (Pte1->getElementType()->isIntegerTy(8))
+              if (Pte1->getPointerElementType()->isIntegerTy(8))
                 return StringSwitch<ARCInstKind>(F->getName())
                     .Case("objc_moveWeak", ARCInstKind::MoveWeak)
                     .Case("objc_copyWeak", ARCInstKind::CopyWeak)

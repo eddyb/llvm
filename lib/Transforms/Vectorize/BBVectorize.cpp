@@ -647,10 +647,10 @@ namespace {
         ConstantInt *IntOff = ConstOffSCEV->getValue();
         int64_t Offset = IntOff->getSExtValue();
         const DataLayout &DL = I->getModule()->getDataLayout();
-        Type *VTy = IPtr->getType()->getPointerElementType();
+        Type *VTy = cast<PointerType>(IPtr->getType())->getPointerElementType();
         int64_t VTyTSS = (int64_t)DL.getTypeStoreSize(VTy);
 
-        Type *VTy2 = JPtr->getType()->getPointerElementType();
+        Type *VTy2 = cast<PointerType>(JPtr->getType())->getPointerElementType();
         if (VTy != VTy2 && Offset < 0) {
           int64_t VTy2TSS = (int64_t)DL.getTypeStoreSize(VTy2);
           OffsetInElmts = Offset/VTy2TSS;
@@ -2314,8 +2314,8 @@ namespace {
     // The pointer value is taken to be the one with the lowest offset.
     Value *VPtr = IPtr;
 
-    Type *ArgTypeI = IPtr->getType()->getPointerElementType();
-    Type *ArgTypeJ = JPtr->getType()->getPointerElementType();
+    Type *ArgTypeI = cast<PointerType>(IPtr->getType())->getPointerElementType();
+    Type *ArgTypeJ = cast<PointerType>(JPtr->getType())->getPointerElementType();
     Type *VArgType = getVecTypeForPair(ArgTypeI, ArgTypeJ);
     Type *VArgPtrType
       = PointerType::get(VArgType,

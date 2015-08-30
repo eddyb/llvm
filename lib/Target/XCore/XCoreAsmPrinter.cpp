@@ -94,7 +94,7 @@ void XCoreAsmPrinter::emitArrayBound(MCSymbol *Sym, const GlobalVariable *GV) {
             GV->hasLinkOnceLinkage() || GV->hasCommonLinkage() ) &&
           "Unexpected linkage");
   if (ArrayType *ATy = dyn_cast<ArrayType>(
-                        cast<PointerType>(GV->getType())->getElementType())) {
+                        cast<PointerType>(GV->getType())->getPointerElementType())) {
 
     MCSymbol *SymGlob = OutContext.getOrCreateSymbol(
                           Twine(Sym->getName() + StringRef(".globound")));

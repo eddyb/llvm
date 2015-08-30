@@ -235,7 +235,7 @@ public:
                                            Type *DestTy,
                                            unsigned Flags) {
     return Create(
-        cast<PointerType>(C->getType()->getScalarType())->getElementType(), C,
+        cast<PointerType>(C->getType()->getScalarType())->getPointerElementType(), C,
         IdxList, DestTy, Flags);
   }
   static GetElementPtrConstantExpr *Create(Type *SrcElementTy, Constant *C,
@@ -534,7 +534,7 @@ struct ConstantExprKeyType {
       return GetElementPtrConstantExpr::Create(
           ExplicitTy ? ExplicitTy
                      : cast<PointerType>(Ops[0]->getType()->getScalarType())
-                           ->getElementType(),
+                           ->getPointerElementType(),
           Ops[0], Ops.slice(1), Ty, SubclassOptionalData);
     case Instruction::ICmp:
       return new CompareConstantExpr(Ty, Instruction::ICmp, SubclassData,

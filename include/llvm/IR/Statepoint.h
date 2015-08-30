@@ -145,7 +145,7 @@ public:
   /// statepoint.
   Type *getActualReturnType() const {
     auto *FTy = cast<FunctionType>(
-        cast<PointerType>(getCalledValue()->getType())->getElementType());
+        cast<PointerType>(getCalledValue()->getType())->getPointerElementType());
     return FTy->getReturnType();
   }
 

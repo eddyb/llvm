@@ -1101,7 +1101,7 @@ bool CallAnalyzer::analyzeCall(CallSite CS) {
       // We approximate the number of loads and stores needed by dividing the
       // size of the byval type by the target's pointer size.
       PointerType *PTy = cast<PointerType>(CS.getArgument(I)->getType());
-      unsigned TypeSize = DL.getTypeSizeInBits(PTy->getElementType());
+      unsigned TypeSize = DL.getTypeSizeInBits(PTy->getPointerElementType());
       unsigned PointerSize = DL.getPointerSizeInBits();
       // Ceiling division.
       unsigned NumStores = (TypeSize + PointerSize - 1) / PointerSize;

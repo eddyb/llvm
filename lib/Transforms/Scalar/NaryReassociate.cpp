@@ -315,7 +315,10 @@ static bool isGEPFoldable(GetElementPtrInst *GEP,
 
   gep_type_iterator GTI = gep_type_begin(GEP);
   for (auto I = GEP->idx_begin(); I != GEP->idx_end(); ++I, ++GTI) {
-    if (isa<SequentialType>(*GTI)) {
+    if (StructType *STy = dyn_cast<StructType>(*GTI)) {
+      uint64_t Field = cast<ConstantInt>(*I)->getZExtValue();
+      BaseOffset += DL->getStructLayout(STy)->getElementOffset(Field);
+    } else {
       int64_t ElementSize = DL->getTypeAllocSize(GTI.getIndexedType());
       if (ConstantInt *ConstIdx = dyn_cast<ConstantInt>(*I)) {
         BaseOffset += ConstIdx->getSExtValue() * ElementSize;
@@ -327,15 +330,11 @@ static bool isGEPFoldable(GetElementPtrInst *GEP,
         }
         Scale = ElementSize;
       }
-    } else {
-      StructType *STy = cast<StructType>(*GTI);
-      uint64_t Field = cast<ConstantInt>(*I)->getZExtValue();
-      BaseOffset += DL->getStructLayout(STy)->getElementOffset(Field);
     }
   }
 
   unsigned AddrSpace = GEP->getPointerAddressSpace();
-  return TTI->isLegalAddressingMode(GEP->getType()->getElementType(), BaseGV,
+  return TTI->isLegalAddressingMode(cast<PointerType>(GEP->getType())->getPointerElementType(), BaseGV,
                                     BaseOffset, HasBaseReg, Scale, AddrSpace);
 }
 
@@ -346,11 +345,12 @@ Instruction *NaryReassociate::tryReassociateGEP(GetElementPtrInst *GEP) {
 
   gep_type_iterator GTI = gep_type_begin(*GEP);
   for (unsigned I = 1, E = GEP->getNumOperands(); I != E; ++I) {
-    if (isa<SequentialType>(*GTI++)) {
+    if (isa<SequentialType>(*GTI) || isa<PointerType>(*GTI)) {
+      GTI++;
       if (auto *NewGEP = tryReassociateGEPAtIndex(GEP, I - 1, *GTI)) {
         return NewGEP;
       }
-    }
+    } else GTI++;
   }
   return nullptr;
 }
@@ -434,7 +434,7 @@ GetElementPtrInst *NaryReassociate::tryReassociateGEPAtIndex(
 
   // NewGEP = (char *)Candidate + RHS * sizeof(IndexedType)
   uint64_t IndexedSize = DL->getTypeAllocSize(IndexedType);
-  Type *ElementType = GEP->getType()->getElementType();
+  Type *ElementType = cast<PointerType>(GEP->getType())->getPointerElementType();
   uint64_t ElementSize = DL->getTypeAllocSize(ElementType);
   // Another less rare case: because I is not necessarily the last index of the
   // GEP, the size of the type at the I-th index (IndexedSize) is not

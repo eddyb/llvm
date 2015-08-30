@@ -962,7 +962,7 @@ void Interpreter::SwitchToNewBasicBlock(BasicBlock *Dest, ExecutionContext &SF){
 void Interpreter::visitAllocaInst(AllocaInst &I) {
   ExecutionContext &SF = ECStack.back();
 
-  Type *Ty = I.getType()->getElementType();  // Type to be allocated
+  Type *Ty = I.getType()->getPointerElementType();  // Type to be allocated
 
   // Get the number of elements being allocated by the array...
   unsigned NumElements = 
@@ -1007,7 +1007,13 @@ GenericValue Interpreter::executeGEPOperation(Value *Ptr, gep_type_iterator I,
 
       Total += SLO->getElementOffset(Index);
     } else {
-      SequentialType *ST = cast<SequentialType>(*I);
+      Type *ElTy;
+      if (auto *PtrTy = dyn_cast<PointerType>(*I)) {
+        ElTy = PtrTy->getPointerElementType();
+      } else {
+        ElTy = cast<SequentialType>(*I)->getElementType();
+      }
+
       // Get the index number for the array... which must be long type...
       GenericValue IdxGV = getOperandValue(I.getOperand(), SF);
 
@@ -1020,7 +1026,7 @@ GenericValue Interpreter::executeGEPOperation(Value *Ptr, gep_type_iterator I,
         assert(BitWidth == 64 && "Invalid index type for getelementptr");
         Idx = (int64_t)IdxGV.IntVal.getZExtValue();
       }
-      Total += getDataLayout().getTypeAllocSize(ST->getElementType()) * Idx;
+      Total += getDataLayout().getTypeAllocSize(ElTy) * Idx;
     }
   }
 

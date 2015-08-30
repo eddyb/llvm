@@ -1988,7 +1988,7 @@ int LoopVectorizationLegality::isConsecutivePtr(Value *Ptr) {
   assert(Ptr->getType()->isPointerTy() && "Unexpected non-ptr");
   auto *SE = PSE.getSE();
   // Make sure that the pointer does not point to structs.
-  if (Ptr->getType()->getPointerElementType()->isAggregateType())
+  if (cast<PointerType>(Ptr->getType())->getPointerElementType()->isAggregateType())
     return 0;
 
   // If this value is a pointer induction variable we know it is consecutive.
@@ -2011,7 +2011,7 @@ int LoopVectorizationLegality::isConsecutivePtr(Value *Ptr) {
 
     // Make sure that the pointer does not point to structs.
     PointerType *GepPtrType = cast<PointerType>(GpPtr->getType());
-    if (GepPtrType->getElementType()->isAggregateType())
+    if (GepPtrType->getPointerElementType()->isAggregateType())
       return 0;
 
     // Make sure that all of the index operands are loop invariant.
@@ -4592,12 +4592,12 @@ void InterleavedAccessInfo::collectConstStridedAccesses(
 
     const SCEV *Scev = replaceSymbolicStrideSCEV(PSE, Strides, Ptr);
     PointerType *PtrTy = dyn_cast<PointerType>(Ptr->getType());
-    unsigned Size = DL.getTypeAllocSize(PtrTy->getElementType());
+    unsigned Size = DL.getTypeAllocSize(PtrTy->getPointerElementType());
 
     // An alignment of 0 means target ABI alignment.
     unsigned Align = LI ? LI->getAlignment() : SI->getAlignment();
     if (!Align)
-      Align = DL.getABITypeAlignment(PtrTy->getElementType());
+      Align = DL.getABITypeAlignment(PtrTy->getPointerElementType());
 
     StrideAccesses[I] = StrideDescriptor(Stride, Scev, Size, Align);
   }

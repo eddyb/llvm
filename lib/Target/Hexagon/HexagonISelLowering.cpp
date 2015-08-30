@@ -2853,7 +2853,7 @@ Value *HexagonTargetLowering::emitLoadLinked(IRBuilder<> &Builder, Value *Addr,
       AtomicOrdering Ord) const {
   BasicBlock *BB = Builder.GetInsertBlock();
   Module *M = BB->getParent()->getParent();
-  Type *Ty = cast<PointerType>(Addr->getType())->getElementType();
+  Type *Ty = cast<PointerType>(Addr->getType())->getPointerElementType();
   unsigned SZ = Ty->getPrimitiveSizeInBits();
   assert((SZ == 32 || SZ == 64) && "Only 32/64-bit atomic loads supported");
   Intrinsic::ID IntID = (SZ == 32) ? Intrinsic::hexagon_L2_loadw_locked

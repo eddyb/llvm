@@ -67,7 +67,7 @@ bool NVPTXLowerAlloca::runOnBasicBlock(BasicBlock &BB) {
     if (auto allocaInst = dyn_cast<AllocaInst>(&I)) {
       Changed = true;
       auto PTy = dyn_cast<PointerType>(allocaInst->getType());
-      auto ETy = PTy->getElementType();
+      auto ETy = PTy->getPointerElementType();
       auto LocalAddrTy = PointerType::get(ETy, ADDRESS_SPACE_LOCAL);
       auto NewASCToLocal = new AddrSpaceCastInst(allocaInst, LocalAddrTy, "");
       auto GenericAddrTy = PointerType::get(ETy, ADDRESS_SPACE_GENERIC);

@@ -68,7 +68,7 @@ bool llvm::isSafeToLoadUnconditionally(Value *V, Instruction *ScanFrom,
 
   // Zero alignment means that the load has the ABI alignment for the target
   if (Align == 0)
-    Align = DL.getABITypeAlignment(V->getType()->getPointerElementType());
+    Align = DL.getABITypeAlignment(cast<PointerType>(V->getType())->getPointerElementType());
   assert(isPowerOf2_32(Align));
 
   int64_t ByteOffset = 0;
@@ -89,13 +89,13 @@ bool llvm::isSafeToLoadUnconditionally(Value *V, Instruction *ScanFrom,
     // overridden. Their size may change or they may be weak and require a test
     // to determine if they were in fact provided.
     if (!GV->mayBeOverridden()) {
-      BaseType = GV->getType()->getElementType();
+      BaseType = GV->getType()->getPointerElementType();
       BaseAlign = GV->getAlignment();
     }
   }
 
   PointerType *AddrTy = cast<PointerType>(V->getType());
-  uint64_t LoadSize = DL.getTypeStoreSize(AddrTy->getElementType());
+  uint64_t LoadSize = DL.getTypeStoreSize(AddrTy->getPointerElementType());
 
   // If we found a base allocated type from either an alloca or global variable,
   // try to see if we are definitively within the allocated region. We need to
@@ -145,7 +145,7 @@ bool llvm::isSafeToLoadUnconditionally(Value *V, Instruction *ScanFrom,
     } else
       continue;
 
-    Type *AccessedTy = AccessedPtr->getType()->getPointerElementType();
+    Type *AccessedTy = cast<PointerType>(AccessedPtr->getType())->getPointerElementType();
     if (AccessedAlign == 0)
       AccessedAlign = DL.getABITypeAlignment(AccessedTy);
     if (AccessedAlign < Align)
@@ -200,7 +200,7 @@ Value *llvm::FindAvailableLoadedValue(Value *Ptr, BasicBlock *ScanBB,
   if (MaxInstsToScan == 0)
     MaxInstsToScan = ~0U;
 
-  Type *AccessTy = cast<PointerType>(Ptr->getType())->getElementType();
+  Type *AccessTy = cast<PointerType>(Ptr->getType())->getPointerElementType();
 
   const DataLayout &DL = ScanBB->getModule()->getDataLayout();
 

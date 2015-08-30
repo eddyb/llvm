@@ -6784,10 +6784,10 @@ bool AArch64TargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
   case Intrinsic::aarch64_ldxr: {
     PointerType *PtrTy = cast<PointerType>(I.getArgOperand(0)->getType());
     Info.opc = ISD::INTRINSIC_W_CHAIN;
-    Info.memVT = MVT::getVT(PtrTy->getElementType());
+    Info.memVT = MVT::getVT(PtrTy->getPointerElementType());
     Info.ptrVal = I.getArgOperand(0);
     Info.offset = 0;
-    Info.align = DL.getABITypeAlignment(PtrTy->getElementType());
+    Info.align = DL.getABITypeAlignment(PtrTy->getPointerElementType());
     Info.vol = true;
     Info.readMem = true;
     Info.writeMem = false;
@@ -6797,10 +6797,10 @@ bool AArch64TargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
   case Intrinsic::aarch64_stxr: {
     PointerType *PtrTy = cast<PointerType>(I.getArgOperand(1)->getType());
     Info.opc = ISD::INTRINSIC_W_CHAIN;
-    Info.memVT = MVT::getVT(PtrTy->getElementType());
+    Info.memVT = MVT::getVT(PtrTy->getPointerElementType());
     Info.ptrVal = I.getArgOperand(1);
     Info.offset = 0;
-    Info.align = DL.getABITypeAlignment(PtrTy->getElementType());
+    Info.align = DL.getABITypeAlignment(PtrTy->getPointerElementType());
     Info.vol = true;
     Info.readMem = false;
     Info.writeMem = true;
@@ -9920,7 +9920,7 @@ bool AArch64TargetLowering::shouldExpandAtomicCmpXchgInIR(
 Value *AArch64TargetLowering::emitLoadLinked(IRBuilder<> &Builder, Value *Addr,
                                              AtomicOrdering Ord) const {
   Module *M = Builder.GetInsertBlock()->getParent()->getParent();
-  Type *ValTy = cast<PointerType>(Addr->getType())->getElementType();
+  Type *ValTy = cast<PointerType>(Addr->getType())->getPointerElementType();
   bool IsAcquire = isAtLeastAcquire(Ord);
 
   // Since i128 isn't legal and intrinsics don't get type-lowered, the ldrexd
@@ -9949,7 +9949,7 @@ Value *AArch64TargetLowering::emitLoadLinked(IRBuilder<> &Builder, Value *Addr,
 
   return Builder.CreateTruncOrBitCast(
       Builder.CreateCall(Ldxr, Addr),
-      cast<PointerType>(Addr->getType())->getElementType());
+      cast<PointerType>(Addr->getType())->getPointerElementType());
 }
 
 void AArch64TargetLowering::emitAtomicCmpXchgNoStoreLLBalance(

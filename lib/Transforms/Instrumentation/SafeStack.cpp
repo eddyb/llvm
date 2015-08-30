@@ -418,7 +418,7 @@ void SafeStack::findInsts(Function &F,
     if (!Arg.hasByValAttr())
       continue;
     uint64_t Size =
-        DL->getTypeStoreSize(Arg.getType()->getPointerElementType());
+        DL->getTypeStoreSize(cast<PointerType>(Arg.getType())->getPointerElementType());
     if (IsSafeStackAlloca(&Arg, Size))
       continue;
 
@@ -493,7 +493,7 @@ Value *SafeStack::moveStaticAllocasToUnsafeStack(
   // Compute maximum alignment among static objects on the unsafe stack.
   unsigned MaxAlignment = 0;
   for (Argument *Arg : ByValArguments) {
-    Type *Ty = Arg->getType()->getPointerElementType();
+    Type *Ty = cast<PointerType>(Arg->getType())->getPointerElementType();
     unsigned Align = std::max((unsigned)DL->getPrefTypeAlignment(Ty),
                               Arg->getParamAlignment());
     if (Align > MaxAlignment)
@@ -521,7 +521,7 @@ Value *SafeStack::moveStaticAllocasToUnsafeStack(
   IRB.SetInsertPoint(BasePointer->getNextNode());
 
   for (Argument *Arg : ByValArguments) {
-    Type *Ty = Arg->getType()->getPointerElementType();
+    Type *Ty = cast<PointerType>(Arg->getType())->getPointerElementType();
 
     uint64_t Size = DL->getTypeStoreSize(Ty);
     if (Size == 0)

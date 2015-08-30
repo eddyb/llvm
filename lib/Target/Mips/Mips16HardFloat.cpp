@@ -433,7 +433,7 @@ static bool fixupFPReturnAndCall(Function &F, Module *M,
         PointerType *PFT = nullptr;
         if (T) PFT = dyn_cast<PointerType>(T);
         FunctionType *FT = nullptr;
-        if (PFT) FT = dyn_cast<FunctionType>(PFT->getElementType());
+        if (PFT) FT = dyn_cast<FunctionType>(PFT->getPointerElementType());
         Function *F_ =  CI->getCalledFunction();
         if (FT && needsFPReturnHelper(*FT) &&
             !(F_ && isIntrinsicInline(F_))) {

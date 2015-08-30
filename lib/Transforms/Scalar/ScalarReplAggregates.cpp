@@ -518,7 +518,7 @@ bool ConvertToScalarInfo::CanConvertToScalar(Value *V, uint64_t Offset,
       SmallVector<Value*, 8> Indices(GEP->op_begin()+1, GEP->op_end());
       Value *GEPNonConstantIdx = nullptr;
       if (!GEP->hasAllConstantIndices()) {
-        if (!isa<VectorType>(PtrTy->getElementType()))
+        if (!isa<VectorType>(PtrTy->getPointerElementType()))
           return false;
         if (NonConstantIdx)
           return false;
@@ -710,7 +710,7 @@ void ConvertToScalarInfo::ConvertUsesToScalar(Value *Ptr, AllocaInst *NewAI,
         PointerType* SPTy = cast<PointerType>(SrcPtr->getType());
         PointerType* AIPTy = cast<PointerType>(NewAI->getType());
         if (SPTy->getAddressSpace() != AIPTy->getAddressSpace()) {
-          AIPTy = PointerType::get(AIPTy->getElementType(),
+          AIPTy = PointerType::get(AIPTy->getPointerElementType(),
                                    SPTy->getAddressSpace());
         }
         SrcPtr = Builder.CreateBitCast(SrcPtr, AIPTy);
@@ -727,7 +727,7 @@ void ConvertToScalarInfo::ConvertUsesToScalar(Value *Ptr, AllocaInst *NewAI,
         PointerType* DPTy = cast<PointerType>(MTI->getDest()->getType());
         PointerType* AIPTy = cast<PointerType>(NewAI->getType());
         if (DPTy->getAddressSpace() != AIPTy->getAddressSpace()) {
-          AIPTy = PointerType::get(AIPTy->getElementType(),
+          AIPTy = PointerType::get(AIPTy->getPointerElementType(),
                                    DPTy->getAddressSpace());
         }
         Value *DstPtr = Builder.CreateBitCast(MTI->getDest(), AIPTy);
@@ -1366,7 +1366,7 @@ static bool tryToMakeAllocaBePromotable(AllocaInst *AI, const DataLayout &DL) {
       continue;
     }
 
-    Type *LoadTy = cast<PointerType>(PN->getType())->getElementType();
+    Type *LoadTy = cast<PointerType>(PN->getType())->getPointerElementType();
     PHINode *NewPN = PHINode::Create(LoadTy, PN->getNumIncomingValues(),
                                      PN->getName()+".ld", PN);
 
@@ -2098,7 +2098,11 @@ void SROA::RewriteGEP(GetElementPtrInst *GEPI, AllocaInst *AI, uint64_t Offset,
     // to index.
     while (!isa<VectorType>(GepTy)) {
       NewArgs.push_back(Constant::getNullValue(i32Ty));
-      GepTy = cast<CompositeType>(GepTy)->getTypeAtIndex(0U);
+      if (auto *PtrTy = dyn_cast<PointerType>(GepTy)) {
+        GepTy = PtrTy->getPointerElementType();
+      } else {
+        GepTy = cast<CompositeType>(GepTy)->getTypeAtIndex(0U);
+      }
     }
     NewArgs.push_back(NonConstantIdx);
   }
@@ -2220,7 +2224,7 @@ SROA::RewriteMemIntrinUserOfAlloca(MemIntrinsic *MI, Instruction *Inst,
     // If the pointer is not the right type, insert a bitcast to the right
     // type.
     Type *NewTy =
-      PointerType::get(AI->getType()->getElementType(), AddrSpace);
+      PointerType::get(AI->getType()->getPointerElementType(), AddrSpace);
 
     if (OtherPtr->getType() != NewTy)
       OtherPtr = new BitCastInst(OtherPtr, NewTy, OtherPtr->getName(), MI);
@@ -2245,7 +2249,7 @@ SROA::RewriteMemIntrinUserOfAlloca(MemIntrinsic *MI, Instruction *Inst,
                                                    MI);
       uint64_t EltOffset;
       PointerType *OtherPtrTy = cast<PointerType>(OtherPtr->getType());
-      Type *OtherTy = OtherPtrTy->getElementType();
+      Type *OtherTy = OtherPtrTy->getPointerElementType();
       if (StructType *ST = dyn_cast<StructType>(OtherTy)) {
         EltOffset = DL.getStructLayout(ST)->getElementOffset(i);
       } else {
@@ -2262,7 +2266,7 @@ SROA::RewriteMemIntrinUserOfAlloca(MemIntrinsic *MI, Instruction *Inst,
     }
 
     Value *EltPtr = NewElts[i];
-    Type *EltTy = cast<PointerType>(EltPtr->getType())->getElementType();
+    Type *EltTy = cast<PointerType>(EltPtr->getType())->getPointerElementType();
 
     // If we got down to a scalar, insert a load or store as appropriate.
     if (EltTy->isSingleValueType()) {
@@ -2495,7 +2499,7 @@ SROA::RewriteLoadUserOfWholeAlloca(LoadInst *LI, AllocaInst *AI,
     // the pointer to an integer of the same size before doing the load.
     Value *SrcField = NewElts[i];
     Type *FieldTy =
-      cast<PointerType>(SrcField->getType())->getElementType();
+      cast<PointerType>(SrcField->getType())->getPointerElementType();
     uint64_t FieldSizeBits = DL.getTypeSizeInBits(FieldTy);
 
     // Ignore zero sized fields like {}, they obviously contain no data.

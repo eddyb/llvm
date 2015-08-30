@@ -689,7 +689,7 @@ bool InductionDescriptor::isInductionPHI(PHINode *Phi, ScalarEvolution *SE,
   }
 
   assert(PhiTy->isPointerTy() && "The PHI must be a pointer");
-  Type *PointerElementType = PhiTy->getPointerElementType();
+  Type *PointerElementType = cast<PointerType>(PhiTy)->getPointerElementType();
   // The pointer stride cannot be determined if the pointer element type is not
   // sized.
   if (!PointerElementType->isSized())

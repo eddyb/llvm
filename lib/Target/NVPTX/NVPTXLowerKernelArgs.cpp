@@ -147,7 +147,7 @@ void NVPTXLowerKernelArgs::handleByValParam(Argument *Arg) {
 
   assert(PType && "Expecting pointer type in handleByValParam");
 
-  Type *StructType = PType->getElementType();
+  Type *StructType = PType->getPointerElementType();
   AllocaInst *AllocA = new AllocaInst(StructType, Arg->getName(), FirstInst);
   // Set the alignment to alignment of the byval parameter. This is because,
   // later load/stores assume that alignment, and we are going to replace
@@ -179,7 +179,7 @@ void NVPTXLowerKernelArgs::markPointerAsGlobal(Value *Ptr) {
   }
 
   Instruction *PtrInGlobal = new AddrSpaceCastInst(
-      Ptr, PointerType::get(Ptr->getType()->getPointerElementType(),
+      Ptr, PointerType::get(cast<PointerType>(Ptr->getType())->getPointerElementType(),
                             ADDRESS_SPACE_GLOBAL),
       Ptr->getName(), &*InsertPt);
   Value *PtrInGeneric = new AddrSpaceCastInst(PtrInGlobal, Ptr->getType(),

@@ -425,7 +425,7 @@ static void WriteTypeTable(const ValueEnumerator &VE, BitstreamWriter &Stream) {
       PointerType *PTy = cast<PointerType>(T);
       // POINTER: [pointee type, address space]
       Code = bitc::TYPE_CODE_POINTER;
-      TypeVals.push_back(VE.getTypeID(PTy->getElementType()));
+      TypeVals.push_back(VE.getTypeID(PTy->getPointerElementType()));
       unsigned AddressSpace = PTy->getAddressSpace();
       TypeVals.push_back(AddressSpace);
       if (AddressSpace == 0) AbbrevToUse = PtrAbbrev;

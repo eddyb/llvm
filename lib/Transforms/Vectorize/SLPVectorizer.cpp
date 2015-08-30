@@ -1862,7 +1862,7 @@ bool BoUpSLP::isConsecutiveAccess(Value *A, Value *B, const DataLayout &DL) {
     return false;
 
   unsigned PtrBitWidth = DL.getPointerSizeInBits(ASA);
-  Type *Ty = cast<PointerType>(PtrA->getType())->getElementType();
+  Type *Ty = cast<PointerType>(PtrA->getType())->getPointerElementType();
   APInt Size(PtrBitWidth, DL.getTypeStoreSize(Ty));
 
   APInt OffsetA(PtrBitWidth, 0), OffsetB(PtrBitWidth, 0);

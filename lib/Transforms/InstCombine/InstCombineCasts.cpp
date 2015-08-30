@@ -87,7 +87,7 @@ Instruction *InstCombiner::PromoteCastOfAllocation(BitCastInst &CI,
 
   // Get the type really allocated and the type casted to.
   Type *AllocElTy = AI.getAllocatedType();
-  Type *CastElTy = PTy->getElementType();
+  Type *CastElTy = PTy->getPointerElementType();
   if (!AllocElTy->isSized() || !CastElTy->isSized()) return nullptr;
 
   unsigned AllocElTyAlign = DL.getABITypeAlignment(AllocElTy);
@@ -1800,8 +1800,8 @@ Instruction *InstCombiner::visitBitCast(BitCastInst &CI) {
 
   if (PointerType *DstPTy = dyn_cast<PointerType>(DestTy)) {
     PointerType *SrcPTy = cast<PointerType>(SrcTy);
-    Type *DstElTy = DstPTy->getElementType();
-    Type *SrcElTy = SrcPTy->getElementType();
+    Type *DstElTy = DstPTy->getPointerElementType();
+    Type *SrcElTy = SrcPTy->getPointerElementType();
 
     // If we are casting a alloca to a pointer to a type of the same
     // size, rewrite the allocation instruction to allocate the "right" type.
@@ -1816,7 +1816,7 @@ Instruction *InstCombiner::visitBitCast(BitCastInst &CI) {
     // This can enhance SROA and other transforms that want type-safe pointers.
     unsigned NumZeros = 0;
     while (SrcElTy != DstElTy &&
-           isa<CompositeType>(SrcElTy) && !SrcElTy->isPointerTy() &&
+           isa<CompositeType>(SrcElTy) &&
            SrcElTy->getNumContainedTypes() /* not "{}" */) {
       SrcElTy = cast<CompositeType>(SrcElTy)->getTypeAtIndex(0U);
       ++NumZeros;
@@ -1918,8 +1918,8 @@ Instruction *InstCombiner::visitAddrSpaceCast(AddrSpaceCastInst &CI) {
   PointerType *SrcTy = cast<PointerType>(Src->getType()->getScalarType());
   PointerType *DestTy = cast<PointerType>(CI.getType()->getScalarType());
 
-  Type *DestElemTy = DestTy->getElementType();
-  if (SrcTy->getElementType() != DestElemTy) {
+  Type *DestElemTy = DestTy->getPointerElementType();
+  if (SrcTy->getPointerElementType() != DestElemTy) {
     Type *MidTy = PointerType::get(DestElemTy, SrcTy->getAddressSpace());
     if (VectorType *VT = dyn_cast<VectorType>(CI.getType())) {
       // Handle vectors of pointers.

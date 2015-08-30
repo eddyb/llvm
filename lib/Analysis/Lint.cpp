@@ -254,7 +254,7 @@ void Lint::visitCallSite(CallSite CS) {
         // Check that an sret argument points to valid memory.
         if (Formal->hasStructRetAttr() && Actual->getType()->isPointerTy()) {
           Type *Ty =
-            cast<PointerType>(Formal->getType())->getElementType();
+            cast<PointerType>(Formal->getType())->getPointerElementType();
           visitMemoryReference(I, Actual, DL->getTypeStoreSize(Ty),
                                DL->getABITypeAlignment(Ty), Ty,
                                MemRef::Read | MemRef::Write);
@@ -435,7 +435,7 @@ void Lint::visitMemoryReference(Instruction &I,
       // If the global may be defined differently in another compilation unit
       // then don't warn about funky memory accesses.
       if (GV->hasDefinitiveInitializer()) {
-        Type *GTy = GV->getType()->getElementType();
+        Type *GTy = GV->getType()->getPointerElementType();
         if (GTy->isSized())
           BaseSize = DL->getTypeAllocSize(GTy);
         BaseAlign = GV->getAlignment();

@@ -250,7 +250,10 @@ static bool isGEPFoldable(GetElementPtrInst *GEP,
 
   gep_type_iterator GTI = gep_type_begin(GEP);
   for (auto I = GEP->idx_begin(); I != GEP->idx_end(); ++I, ++GTI) {
-    if (isa<SequentialType>(*GTI)) {
+    if (StructType *STy = dyn_cast<StructType>(*GTI)) {
+      uint64_t Field = cast<ConstantInt>(*I)->getZExtValue();
+      BaseOffset += DL->getStructLayout(STy)->getElementOffset(Field);
+    } else {
       int64_t ElementSize = DL->getTypeAllocSize(GTI.getIndexedType());
       if (ConstantInt *ConstIdx = dyn_cast<ConstantInt>(*I)) {
         BaseOffset += ConstIdx->getSExtValue() * ElementSize;
@@ -262,15 +265,11 @@ static bool isGEPFoldable(GetElementPtrInst *GEP,
         }
         Scale = ElementSize;
       }
-    } else {
-      StructType *STy = cast<StructType>(*GTI);
-      uint64_t Field = cast<ConstantInt>(*I)->getZExtValue();
-      BaseOffset += DL->getStructLayout(STy)->getElementOffset(Field);
     }
   }
 
   unsigned AddrSpace = GEP->getPointerAddressSpace();
-  return TTI->isLegalAddressingMode(GEP->getType()->getElementType(), BaseGV,
+  return TTI->isLegalAddressingMode(cast<PointerType>(GEP->getType())->getPointerElementType(), BaseGV,
                                     BaseOffset, HasBaseReg, Scale, AddrSpace);
 }
 
@@ -520,8 +519,11 @@ void StraightLineStrengthReduce::allocateCandidatesAndFindBasisForGEP(
 
   gep_type_iterator GTI = gep_type_begin(GEP);
   for (unsigned I = 1, E = GEP->getNumOperands(); I != E; ++I) {
-    if (!isa<SequentialType>(*GTI++))
+    if (!isa<SequentialType>(*GTI) && !isa<PointerType>(*GTI)) {
+      GTI++;
       continue;
+    }
+    GTI++;
 
     const SCEV *OrigIndexExpr = IndexExprs[I - 1];
     IndexExprs[I - 1] = SE->getZero(OrigIndexExpr->getType());
@@ -567,7 +569,7 @@ Value *StraightLineStrengthReduce::emitBump(const Candidate &Basis,
     APInt ElementSize(
         IndexOffset.getBitWidth(),
         DL->getTypeAllocSize(
-            cast<GetElementPtrInst>(Basis.Ins)->getType()->getElementType()));
+            cast<PointerType>(cast<GetElementPtrInst>(Basis.Ins)->getType())->getPointerElementType()));
     APInt Q, R;
     APInt::sdivrem(IndexOffset, ElementSize, Q, R);
     if (R.getSExtValue() == 0)
