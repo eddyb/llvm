@@ -89,7 +89,7 @@ bool llvm::isSafeToLoadUnconditionally(Value *V, Instruction *ScanFrom,
     // overridden. Their size may change or they may be weak and require a test
     // to determine if they were in fact provided.
     if (!GV->mayBeOverridden()) {
-      BaseType = GV->getType()->getPointerElementType();
+      BaseType = GV->getValueType();
       BaseAlign = GV->getAlignment();
     }
   }

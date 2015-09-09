@@ -2352,8 +2352,7 @@ InstCombiner::transformCallThroughTrampoline(CallSite CS,
          "transformCallThroughTrampoline called with incorrect CallSite.");
 
   Function *NestF =cast<Function>(Tramp->getArgOperand(1)->stripPointerCasts());
-  PointerType *NestFPTy = cast<PointerType>(NestF->getType());
-  FunctionType *NestFTy = cast<FunctionType>(NestFPTy->getPointerElementType());
+  FunctionType *NestFTy = cast<FunctionType>(NestF->getValueType());
 
   const AttributeSet &NestAttrs = NestF->getAttributes();
   if (!NestAttrs.isEmpty()) {
