@@ -278,7 +278,7 @@ bool ReduceCrashingFunctions::TestFuncs(std::vector<Function*> &Funcs) {
         continue;
       }
 
-      PointerType *Ty = cast<PointerType>(Alias.getType());
+      PointerType *Ty = Alias.getType();
       Constant *Replacement = ConstantPointerNull::get(Ty);
       Alias.replaceAllUsesWith(Replacement);
       ToRemove.push_back(&Alias);

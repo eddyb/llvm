@@ -106,7 +106,7 @@ IsGlobalInSmallSectionImpl(const GlobalValue *GV,
                        GV->hasCommonLinkage()))
     return false;
 
-  Type *Ty = GV->getType()->getPointerElementType();
+  Type *Ty = GV->getValueType();
   return IsInSmallSection(
       GV->getParent()->getDataLayout().getTypeAllocSize(Ty));
 }
