@@ -28,6 +28,7 @@ namespace llvm {
   class TargetLibraryInfo;
   class Function;
   class Type;
+  class Value;
   template<typename T>
   class ArrayRef;
 
@@ -45,6 +46,12 @@ namespace llvm {
   Constant *
   ConstantFoldConstantExpression(const ConstantExpr *CE, const DataLayout &DL,
                                  const TargetLibraryInfo *TLI = nullptr);
+
+  Constant *ConstantFoldInstOperands(const Value *InstOrCE,
+                                     unsigned Opcode, Type *DestTy,
+                                     ArrayRef<Constant *> Ops,
+                                     const DataLayout &DL,
+                                     const TargetLibraryInfo *TLI = nullptr);
 
 /// ConstantFoldInstOperands - Attempt to constant fold an instruction with the
 /// specified operands.  If successful, the constant result is returned, if not,

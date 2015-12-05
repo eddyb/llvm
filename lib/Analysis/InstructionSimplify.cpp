@@ -3303,7 +3303,7 @@ static const Value *SimplifyWithOpReplaced(Value *V, Value *Op, Value *RepOp,
         if (!LI->isVolatile())
           return ConstantFoldLoadFromConstPtr(ConstOps[0], Q.DL);
 
-      return ConstantFoldInstOperands(I->getOpcode(), I->getType(), ConstOps,
+      return ConstantFoldInstOperands(I, I->getOpcode(), I->getType(), ConstOps,
                                       Q.DL, Q.TLI);
     }
   }
@@ -3533,13 +3533,13 @@ static Value *SimplifyGEPInst(Type *SrcTy, ArrayRef<Value *> Ops,
                                         Ops.slice(1));
 }
 
-Value *llvm::SimplifyGEPInst(ArrayRef<Value *> Ops, const DataLayout &DL,
+Value *llvm::SimplifyGEPInst(Type *SrcTy, ArrayRef<Value *> Ops,
+                             const DataLayout &DL,
                              const TargetLibraryInfo *TLI,
                              const DominatorTree *DT, AssumptionCache *AC,
                              const Instruction *CxtI) {
-  return ::SimplifyGEPInst(
-      cast<PointerType>(Ops[0]->getType()->getScalarType())->getPointerElementType(),
-      Ops, Query(DL, TLI, DT, AC, CxtI), RecursionLimit);
+  return ::SimplifyGEPInst(SrcTy, Ops,
+                           Query(DL, TLI, DT, AC, CxtI), RecursionLimit);
 }
 
 /// SimplifyInsertValueInst - Given operands for an InsertValueInst, see if we
@@ -4045,7 +4045,8 @@ Value *llvm::SimplifyInstruction(Instruction *I, const DataLayout &DL,
     break;
   case Instruction::GetElementPtr: {
     SmallVector<Value*, 8> Ops(I->op_begin(), I->op_end());
-    Result = SimplifyGEPInst(Ops, DL, TLI, DT, AC, I);
+    Result = SimplifyGEPInst(cast<GetElementPtrInst>(I)->getSourceElementType(),
+                             Ops, DL, TLI, DT, AC, I);
     break;
   }
   case Instruction::InsertValue: {

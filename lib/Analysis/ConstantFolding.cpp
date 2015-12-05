@@ -683,9 +683,7 @@ static Constant *CastGEPIndices(Type *SrcTy, ArrayRef<Constant *> Ops,
   SmallVector<Constant*, 32> NewIdxs;
   for (unsigned i = 1, e = Ops.size(); i != e; ++i) {
     if ((i == 1 ||
-         !isa<StructType>(GetElementPtrInst::getIndexedType(
-             cast<PointerType>(Ops[0]->getType()->getScalarType())
-                 ->getPointerElementType(),
+         !isa<StructType>(GetElementPtrInst::getIndexedType(SrcTy,
              Ops.slice(1, i - 1)))) &&
         Ops[i]->getType() != IntPtrTy) {
       Any = true;
@@ -711,16 +709,17 @@ static Constant *CastGEPIndices(Type *SrcTy, ArrayRef<Constant *> Ops,
 }
 
 /// Strip the pointer casts, but preserve the address space information.
-static Constant* StripPtrCastKeepAS(Constant* Ptr) {
+static Constant* StripPtrCastKeepAS(Constant* Ptr, Type *&SrcTy) {
   assert(Ptr->getType()->isPointerTy() && "Not a pointer type");
   PointerType *OldPtrTy = cast<PointerType>(Ptr->getType());
   Ptr = Ptr->stripPointerCasts();
   PointerType *NewPtrTy = cast<PointerType>(Ptr->getType());
 
+  SrcTy = NewPtrTy->getPointerElementType();
+
   // Preserve the address space number of the pointer.
   if (NewPtrTy->getAddressSpace() != OldPtrTy->getAddressSpace()) {
-    NewPtrTy = NewPtrTy->getPointerElementType()->getPointerTo(
-      OldPtrTy->getAddressSpace());
+    NewPtrTy = SrcTy->getPointerTo(OldPtrTy->getAddressSpace());
     Ptr = ConstantExpr::getPointerCast(Ptr, NewPtrTy);
   }
   return Ptr;
@@ -728,15 +727,14 @@ static Constant* StripPtrCastKeepAS(Constant* Ptr) {
 
 /// If we can symbolically evaluate the GEP constant expression, do so.
 static Constant *SymbolicallyEvaluateGEP(Type *SrcTy, ArrayRef<Constant *> Ops,
-                                         Type *ResultTy, const DataLayout &DL,
+                                         Type *ResultTy, Type *ResultElementTy,
+                                         const DataLayout &DL,
                                          const TargetLibraryInfo *TLI) {
   Constant *Ptr = Ops[0];
-  if (!cast<PointerType>(Ptr->getType())->getPointerElementType()->isSized() ||
-      !Ptr->getType()->isPointerTy())
+  if (!SrcTy->isSized() || !Ptr->getType()->isPointerTy())
     return nullptr;
 
   Type *IntPtrTy = DL.getIntPtrType(Ptr->getType());
-  Type *ResultElementTy = cast<PointerType>(ResultTy)->getPointerElementType();
 
   // If this is a constant expr gep that is effectively computing an
   // "offsetof", fold it into 'cast int Size to T*' instead of 'gep 0, 0, 12'
@@ -766,9 +764,9 @@ static Constant *SymbolicallyEvaluateGEP(Type *SrcTy, ArrayRef<Constant *> Ops,
   APInt Offset =
       APInt(BitWidth,
             DL.getIndexedOffset(
-                Ptr->getType(),
+                SrcTy,
                 makeArrayRef((Value * const *)Ops.data() + 1, Ops.size() - 1)));
-  Ptr = StripPtrCastKeepAS(Ptr);
+  Ptr = StripPtrCastKeepAS(Ptr, SrcTy);
 
   // If this is a GEP of a GEP, fold it all into a single GEP.
   while (GEPOperator *GEP = dyn_cast<GEPOperator>(Ptr)) {
@@ -785,8 +783,9 @@ static Constant *SymbolicallyEvaluateGEP(Type *SrcTy, ArrayRef<Constant *> Ops,
       break;
 
     Ptr = cast<Constant>(GEP->getOperand(0));
-    Offset += APInt(BitWidth, DL.getIndexedOffset(Ptr->getType(), NestedOps));
-    Ptr = StripPtrCastKeepAS(Ptr);
+    SrcTy = GEP->getSourceElementType();
+    Offset += APInt(BitWidth, DL.getIndexedOffset(SrcTy, NestedOps));
+    Ptr = StripPtrCastKeepAS(Ptr, SrcTy);
   }
 
   // If the base value for this address is a literal integer value, fold the
@@ -831,12 +830,12 @@ static Constant *SymbolicallyEvaluateGEP(Type *SrcTy, ArrayRef<Constant *> Ops,
       Offset -= APInt(BitWidth, SL.getElementOffset(ElIdx));
       Ty = STy->getTypeAtIndex(ElIdx);
     } else {
-      if (auto *PtrTy = dyn_cast<PointerType>(Ty)) {
+      if (Ty->isPointerTy()) {
         // The only pointer indexing we'll do is on the first index of the GEP.
         if (!NewIdxs.empty())
           break;
 
-        Ty = PtrTy->getPointerElementType();
+        Ty = SrcTy;
 
         // Only handle pointers to sized types, not pointers to functions.
         if (!Ty->isSized())
@@ -962,7 +961,7 @@ Constant *llvm::ConstantFoldInstruction(Instruction *I, const DataLayout &DL,
                                     EVI->getIndices());
   }
 
-  return ConstantFoldInstOperands(I->getOpcode(), I->getType(), Ops, DL, TLI);
+  return ConstantFoldInstOperands(I, I->getOpcode(), I->getType(), Ops, DL, TLI);
 }
 
 static Constant *
@@ -985,7 +984,7 @@ ConstantFoldConstantExpressionImpl(const ConstantExpr *CE, const DataLayout &DL,
   if (CE->isCompare())
     return ConstantFoldCompareInstOperands(CE->getPredicate(), Ops[0], Ops[1],
                                            DL, TLI);
-  return ConstantFoldInstOperands(CE->getOpcode(), CE->getType(), Ops, DL, TLI);
+  return ConstantFoldInstOperands(CE, CE->getOpcode(), CE->getType(), Ops, DL, TLI);
 }
 
 /// Attempt to fold the constant expression
@@ -1009,6 +1008,14 @@ Constant *llvm::ConstantFoldConstantExpression(const ConstantExpr *CE,
 /// folding using this function strips this information.
 ///
 Constant *llvm::ConstantFoldInstOperands(unsigned Opcode, Type *DestTy,
+                                         ArrayRef<Constant *> Ops,
+                                         const DataLayout &DL,
+                                         const TargetLibraryInfo *TLI) {
+  return ConstantFoldInstOperands(nullptr, Opcode, DestTy, Ops, DL, TLI);
+}
+
+Constant *llvm::ConstantFoldInstOperands(const Value *InstOrCE,
+                                         unsigned Opcode, Type *DestTy,
                                          ArrayRef<Constant *> Ops,
                                          const DataLayout &DL,
                                          const TargetLibraryInfo *TLI) {
@@ -1092,10 +1099,14 @@ Constant *llvm::ConstantFoldInstOperands(unsigned Opcode, Type *DestTy,
   case Instruction::ShuffleVector:
     return ConstantExpr::getShuffleVector(Ops[0], Ops[1], Ops[2]);
   case Instruction::GetElementPtr: {
-    Type *SrcTy = nullptr;
+    assert(InstOrCE && "Missing instruction/constant expression");
+    auto *GEP = cast<GEPOperator>(InstOrCE);
+    Type *SrcTy = GEP->getSourceElementType();
+    Type *DestElemTy = GEP->getResultElementType();
+
     if (Constant *C = CastGEPIndices(SrcTy, Ops, DestTy, DL, TLI))
       return C;
-    if (Constant *C = SymbolicallyEvaluateGEP(SrcTy, Ops, DestTy, DL, TLI))
+    if (Constant *C = SymbolicallyEvaluateGEP(SrcTy, Ops, DestTy, DestElemTy, DL, TLI))
       return C;
 
     return ConstantExpr::getGetElementPtr(SrcTy, Ops[0], Ops.slice(1));

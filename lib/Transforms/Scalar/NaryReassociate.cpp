@@ -334,7 +334,7 @@ static bool isGEPFoldable(GetElementPtrInst *GEP,
   }
 
   unsigned AddrSpace = GEP->getPointerAddressSpace();
-  return TTI->isLegalAddressingMode(cast<PointerType>(GEP->getType())->getPointerElementType(), BaseGV,
+  return TTI->isLegalAddressingMode(GEP->getResultElementType(), BaseGV,
                                     BaseOffset, HasBaseReg, Scale, AddrSpace);
 }
 

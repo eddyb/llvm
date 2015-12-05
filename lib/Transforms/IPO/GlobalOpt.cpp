@@ -329,7 +329,7 @@ static bool CleanupConstantGlobalUsers(Value *V, Constant *Init,
         // we already know what the result of any load from that GEP is.
         // TODO: Handle splats.
         if (Init && isa<ConstantAggregateZero>(Init) && GEP->isInBounds())
-          SubInit = Constant::getNullValue(cast<PointerType>(GEP->getType())->getPointerElementType());
+          SubInit = Constant::getNullValue(GEP->getResultElementType());
       }
       Changed |= CleanupConstantGlobalUsers(GEP, SubInit, DL, TLI);
 
