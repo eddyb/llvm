@@ -334,7 +334,7 @@ static bool isGEPFoldable(GetElementPtrInst *GEP,
   }
 
   unsigned AddrSpace = GEP->getPointerAddressSpace();
-  return TTI->isLegalAddressingMode(cast<PointerType>(GEP->getType())->getPointerElementType(), BaseGV,
+  return TTI->isLegalAddressingMode(GEP->getResultElementType(), BaseGV,
                                     BaseOffset, HasBaseReg, Scale, AddrSpace);
 }
 
@@ -434,7 +434,7 @@ GetElementPtrInst *NaryReassociate::tryReassociateGEPAtIndex(
 
   // NewGEP = (char *)Candidate + RHS * sizeof(IndexedType)
   uint64_t IndexedSize = DL->getTypeAllocSize(IndexedType);
-  Type *ElementType = cast<PointerType>(GEP->getType())->getPointerElementType();
+  Type *ElementType = GEP->getResultElementType();
   uint64_t ElementSize = DL->getTypeAllocSize(ElementType);
   // Another less rare case: because I is not necessarily the last index of the
   // GEP, the size of the type at the I-th index (IndexedSize) is not

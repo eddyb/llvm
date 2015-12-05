@@ -513,8 +513,8 @@ bool FastISel::selectGetElementPtr(const User *I) {
       }
       Ty = StTy->getElementType(Field);
     } else {
-      if (auto *PtrTy = dyn_cast<PointerType>(Ty)) {
-        Ty = PtrTy->getPointerElementType();
+      if (Ty->isPointerTy()) {
+        Ty = cast<GEPOperator>(I)->getSourceElementType();
       } else {
         Ty = cast<SequentialType>(Ty)->getElementType();
       }

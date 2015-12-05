@@ -33,12 +33,6 @@ namespace llvm {
     generic_gep_type_iterator() {}
   public:
 
-    static generic_gep_type_iterator begin(Type *Ty, ItTy It) {
-      generic_gep_type_iterator I;
-      I.CurTy.setPointer(Ty);
-      I.OpIt = It;
-      return I;
-    }
     static generic_gep_type_iterator begin(Type *Ty, unsigned AddrSpace,
                                            ItTy It) {
       generic_gep_type_iterator I;
@@ -70,12 +64,8 @@ namespace llvm {
     Type *getIndexedType() const {
       if (CurTy.getInt())
         return CurTy.getPointer();
-      if (auto *PtrTy = dyn_cast<PointerType>(CurTy.getPointer())) {
-        return PtrTy->getPointerElementType();
-      } else {
-        CompositeType *CT = cast<CompositeType>(CurTy.getPointer());
-        return CT->getTypeAtIndex(getOperand());
-      }
+      CompositeType *CT = cast<CompositeType>(CurTy.getPointer());
+      return CT->getTypeAtIndex(getOperand());
     }
 
     // This is a non-standard operator->.  It allows you to call methods on the
@@ -90,10 +80,7 @@ namespace llvm {
       } else if (CompositeType *CT =
                      dyn_cast<CompositeType>(CurTy.getPointer())) {
         CurTy.setPointer(CT->getTypeAtIndex(getOperand()));
-      } else if (PointerType *PtrTy =
-                     dyn_cast<PointerType>(CurTy.getPointer())) {
-        CurTy.setPointer(PtrTy->getPointerElementType());
-      }  else {
+      } else {
         CurTy.setPointer(nullptr);
       }
       ++OpIt;
@@ -132,13 +119,13 @@ namespace llvm {
 
   template<typename T>
   inline generic_gep_type_iterator<const T *>
-  gep_type_begin(Type *Op0, ArrayRef<T> A) {
-    return generic_gep_type_iterator<const T *>::begin(Op0, A.begin());
+  gep_type_begin(Type *Op0, unsigned AS, ArrayRef<T> A) {
+    return generic_gep_type_iterator<const T *>::begin(Op0, AS, A.begin());
   }
 
   template<typename T>
   inline generic_gep_type_iterator<const T *>
-  gep_type_end(Type * /*Op0*/, ArrayRef<T> A) {
+  gep_type_end(Type * /*Op0*/, unsigned /*AS*/, ArrayRef<T> A) {
     return generic_gep_type_iterator<const T *>::end(A.end());
   }
 } // end namespace llvm

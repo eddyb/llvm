@@ -912,7 +912,7 @@ bool SeparateConstOffsetFromGEP::splitGEP(GetElementPtrInst *GEP) {
         getAnalysis<TargetTransformInfoWrapperPass>().getTTI(
             *GEP->getParent()->getParent());
     unsigned AddrSpace = GEP->getPointerAddressSpace();
-    if (!TTI.isLegalAddressingMode(cast<PointerType>(GEP->getType())->getPointerElementType(),
+    if (!TTI.isLegalAddressingMode(GEP->getResultElementType(),
                                    /*BaseGV=*/nullptr, AccumulativeByteOffset,
                                    /*HasBaseReg=*/true, /*Scale=*/0,
                                    AddrSpace)) {
@@ -1019,7 +1019,7 @@ bool SeparateConstOffsetFromGEP::splitGEP(GetElementPtrInst *GEP) {
   // unsigned.. Therefore, we cast ElementTypeSizeOfGEP to signed because it is
   // used with unsigned integers later.
   int64_t ElementTypeSizeOfGEP = static_cast<int64_t>(
-      DL->getTypeAllocSize(cast<PointerType>(GEP->getType())->getPointerElementType()));
+      DL->getTypeAllocSize(GEP->getResultElementType()));
   Type *IntPtrTy = DL->getIntPtrType(GEP->getType());
   if (AccumulativeByteOffset % ElementTypeSizeOfGEP == 0) {
     // Very likely. As long as %gep is natually aligned, the byte offset we

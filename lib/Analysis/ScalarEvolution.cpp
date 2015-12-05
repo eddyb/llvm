@@ -4094,7 +4094,7 @@ const SCEV *ScalarEvolution::createNodeForSelectOrPHI(Instruction *I,
 const SCEV *ScalarEvolution::createNodeForGEP(GEPOperator *GEP) {
   Value *Base = GEP->getOperand(0);
   // Don't attempt to analyze GEPs over unsized objects.
-  if (!cast<PointerType>(Base->getType())->getPointerElementType()->isSized())
+  if (!GEP->getSourceElementType()->isSized())
     return getUnknown(GEP);
 
   SmallVector<const SCEV *, 4> IndexExprs;
@@ -5915,7 +5915,7 @@ static Constant *EvaluateExpression(Value *V, const Loop *L,
     if (!LI->isVolatile())
       return ConstantFoldLoadFromConstPtr(Operands[0], DL);
   }
-  return ConstantFoldInstOperands(I->getOpcode(), I->getType(), Operands, DL,
+  return ConstantFoldInstOperands(I, I->getOpcode(), I->getType(), Operands, DL,
                                   TLI);
 }
 
@@ -6304,7 +6304,7 @@ const SCEV *ScalarEvolution::computeSCEVAtScope(const SCEV *V, const Loop *L) {
             if (!LI->isVolatile())
               C = ConstantFoldLoadFromConstPtr(Operands[0], DL);
           } else
-            C = ConstantFoldInstOperands(I->getOpcode(), I->getType(), Operands,
+            C = ConstantFoldInstOperands(I, I->getOpcode(), I->getType(), Operands,
                                          DL, &TLI);
           if (!C) return V;
           return getSCEV(C);
