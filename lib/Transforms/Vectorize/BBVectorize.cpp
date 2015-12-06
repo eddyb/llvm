@@ -610,7 +610,9 @@ namespace {
     // after I; if OffsetInElmts == -1 then I accesses the memory
     // directly after J.
     bool getPairPtrInfo(Instruction *I, Instruction *J,
-        Value *&IPtr, Value *&JPtr, unsigned &IAlignment, unsigned &JAlignment,
+        Value *&IPtr, Value *&JPtr,
+        Type *&ITy, Type *&JTy,
+        unsigned &IAlignment, unsigned &JAlignment,
         unsigned &IAddressSpace, unsigned &JAddressSpace,
         int64_t &OffsetInElmts, bool ComputeOffset = true) {
       OffsetInElmts = 0;
@@ -618,6 +620,8 @@ namespace {
         LoadInst *LJ = cast<LoadInst>(J);
         IPtr = LI->getPointerOperand();
         JPtr = LJ->getPointerOperand();
+        ITy = LI->getType();
+        JTy = LJ->getType();
         IAlignment = LI->getAlignment();
         JAlignment = LJ->getAlignment();
         IAddressSpace = LI->getPointerAddressSpace();
@@ -626,6 +630,8 @@ namespace {
         StoreInst *SI = cast<StoreInst>(I), *SJ = cast<StoreInst>(J);
         IPtr = SI->getPointerOperand();
         JPtr = SJ->getPointerOperand();
+        ITy = SI->getValueOperand()->getType();
+        JTy = SJ->getValueOperand()->getType();
         IAlignment = SI->getAlignment();
         JAlignment = SJ->getAlignment();
         IAddressSpace = SI->getPointerAddressSpace();
@@ -647,12 +653,10 @@ namespace {
         ConstantInt *IntOff = ConstOffSCEV->getValue();
         int64_t Offset = IntOff->getSExtValue();
         const DataLayout &DL = I->getModule()->getDataLayout();
-        Type *VTy = IPtr->getType()->getPointerElementType();
-        int64_t VTyTSS = (int64_t)DL.getTypeStoreSize(VTy);
+        int64_t VTyTSS = (int64_t)DL.getTypeStoreSize(ITy);
 
-        Type *VTy2 = JPtr->getType()->getPointerElementType();
-        if (VTy != VTy2 && Offset < 0) {
-          int64_t VTy2TSS = (int64_t)DL.getTypeStoreSize(VTy2);
+        if (ITy != JTy && Offset < 0) {
+          int64_t VTy2TSS = (int64_t)DL.getTypeStoreSize(JTy);
           OffsetInElmts = Offset/VTy2TSS;
           return (std::abs(Offset) % VTy2TSS) == 0;
         }
@@ -981,19 +985,16 @@ namespace {
 
     if (IsSimpleLoadStore) {
       Value *IPtr, *JPtr;
+      Type *aTypeI, *aTypeJ;
       unsigned IAlignment, JAlignment, IAddressSpace, JAddressSpace;
       int64_t OffsetInElmts = 0;
-      if (getPairPtrInfo(I, J, IPtr, JPtr, IAlignment, JAlignment,
+      if (getPairPtrInfo(I, J, IPtr, JPtr, aTypeI, aTypeJ, IAlignment, JAlignment,
                          IAddressSpace, JAddressSpace, OffsetInElmts) &&
           std::abs(OffsetInElmts) == 1) {
         FixedOrder = (int) OffsetInElmts;
         unsigned BottomAlignment = IAlignment;
         if (OffsetInElmts < 0) BottomAlignment = JAlignment;
 
-        Type *aTypeI = isa<StoreInst>(I) ?
-          cast<StoreInst>(I)->getValueOperand()->getType() : I->getType();
-        Type *aTypeJ = isa<StoreInst>(J) ?
-          cast<StoreInst>(J)->getValueOperand()->getType() : J->getType();
         Type *VType = getVecTypeForPair(aTypeI, aTypeJ);
 
         if (Config.AlignedOnly) {
@@ -2302,20 +2303,19 @@ namespace {
   Value *BBVectorize::getReplacementPointerInput(LLVMContext& Context,
                      Instruction *I, Instruction *J, unsigned o) {
     Value *IPtr, *JPtr;
+    Type *ArgTypeI, *ArgTypeJ;
     unsigned IAlignment, JAlignment, IAddressSpace, JAddressSpace;
     int64_t OffsetInElmts;
 
     // Note: the analysis might fail here, that is why the pair order has
     // been precomputed (OffsetInElmts must be unused here).
-    (void) getPairPtrInfo(I, J, IPtr, JPtr, IAlignment, JAlignment,
+    (void) getPairPtrInfo(I, J, IPtr, JPtr, ArgTypeI, ArgTypeJ,
+                          IAlignment, JAlignment,
                           IAddressSpace, JAddressSpace,
                           OffsetInElmts, false);
 
     // The pointer value is taken to be the one with the lowest offset.
     Value *VPtr = IPtr;
-
-    Type *ArgTypeI = IPtr->getType()->getPointerElementType();
-    Type *ArgTypeJ = JPtr->getType()->getPointerElementType();
     Type *VArgType = getVecTypeForPair(ArgTypeI, ArgTypeJ);
     Type *VArgPtrType
       = PointerType::get(VArgType,

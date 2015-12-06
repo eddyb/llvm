@@ -1140,13 +1140,14 @@ static bool isSafeSelectToSpeculate(SelectInst *SI) {
     LoadInst *LI = dyn_cast<LoadInst>(U);
     if (!LI || !LI->isSimple()) return false;
 
+    unsigned Align = LI->getActualAlignment();
+    uint64_t Size = LI->getLoadedSize();
+
     // Both operands to the select need to be dereferencable, either absolutely
     // (e.g. allocas) or at this point because we can see other accesses to it.
-    if (!isSafeToLoadUnconditionally(SI->getTrueValue(), LI->getAlignment(),
-                                     LI))
+    if (!isSafeToLoadUnconditionally(SI->getTrueValue(), Align, Size, LI))
       return false;
-    if (!isSafeToLoadUnconditionally(SI->getFalseValue(), LI->getAlignment(),
-                                     LI))
+    if (!isSafeToLoadUnconditionally(SI->getFalseValue(), Align, Size, LI))
       return false;
   }
 
@@ -1175,7 +1176,9 @@ static bool isSafePHIToSpeculate(PHINode *PN) {
   // TODO: Allow recursive phi users.
   // TODO: Allow stores.
   BasicBlock *BB = PN->getParent();
+
   unsigned MaxAlign = 0;
+  uint64_t MaxSize = 0;
   for (User *U : PN->users()) {
     LoadInst *LI = dyn_cast<LoadInst>(U);
     if (!LI || !LI->isSimple()) return false;
@@ -1190,9 +1193,12 @@ static bool isSafePHIToSpeculate(PHINode *PN) {
       if (BBI->mayWriteToMemory())
         return false;
 
-    MaxAlign = std::max(MaxAlign, LI->getAlignment());
-  }
+    unsigned Align = LI->getActualAlignment();
+    uint64_t Size = LI->getLoadedSize();
 
+    MaxAlign = std::max(MaxAlign, Align);
+    MaxSize = std::max(MaxSize, Size);
+  }
   // Okay, we know that we have one or more loads in the same block as the PHI.
   // We can transform this if it is safe to push the loads into the predecessor
   // blocks.  The only thing to watch out for is that we can't put a possibly
@@ -1217,7 +1223,8 @@ static bool isSafePHIToSpeculate(PHINode *PN) {
 
     // If this pointer is always safe to load, or if we can prove that there is
     // already a load in the block, then we can move the load to the pred block.
-    if (isSafeToLoadUnconditionally(InVal, MaxAlign, Pred->getTerminator()))
+    if (isSafeToLoadUnconditionally(InVal, MaxAlign, MaxSize,
+                                    Pred->getTerminator()))
       continue;
 
     return false;

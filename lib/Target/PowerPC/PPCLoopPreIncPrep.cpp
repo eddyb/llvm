@@ -183,14 +183,17 @@ bool PPCLoopPreIncPrep::runOnLoop(Loop *L) {
     for (BasicBlock::iterator J = (*I)->begin(), JE = (*I)->end();
         J != JE; ++J) {
       Value *PtrValue;
+      Type *ValTy = nullptr;
       Instruction *MemI;
 
       if (LoadInst *LMemI = dyn_cast<LoadInst>(J)) {
         MemI = LMemI;
         PtrValue = LMemI->getPointerOperand();
+        ValTy = LMemI->getType();
       } else if (StoreInst *SMemI = dyn_cast<StoreInst>(J)) {
         MemI = SMemI;
         PtrValue = SMemI->getPointerOperand();
+        ValTy = SMemI->getValueOperand()->getType();
       } else if (IntrinsicInst *IMemI = dyn_cast<IntrinsicInst>(J)) {
         if (IMemI->getIntrinsicID() == Intrinsic::prefetch) {
           MemI = IMemI;
@@ -203,8 +206,7 @@ bool PPCLoopPreIncPrep::runOnLoop(Loop *L) {
         continue;
 
       // There are no update forms for Altivec vector load/stores.
-      if (ST && ST->hasAltivec() &&
-          PtrValue->getType()->getPointerElementType()->isVectorTy())
+      if (ST && ST->hasAltivec() && ValTy && ValTy->isVectorTy())
         continue;
 
       if (L->isLoopInvariant(PtrValue))

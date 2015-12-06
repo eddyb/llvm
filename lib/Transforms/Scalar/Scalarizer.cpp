@@ -49,7 +49,7 @@ public:
   // insert them before BBI in BB.  If Cache is nonnull, use it to cache
   // the results.
   Scatterer(BasicBlock *bb, BasicBlock::iterator bbi, Value *v,
-            ValueVector *cachePtr = nullptr);
+            Type *VecTy, ValueVector *cachePtr = nullptr);
 
   // Return component I, creating a new Value for it if necessary.
   Value *operator[](unsigned I);
@@ -161,7 +161,7 @@ public:
   }
 
 private:
-  Scatterer scatter(Instruction *, Value *);
+  Scatterer scatter(Instruction *, Value *, Type *VecTy = nullptr);
   void gather(Instruction *, const ValueVector &);
   bool canTransferMetadata(unsigned Kind);
   void transferMetadata(Instruction *, const ValueVector &);
@@ -183,13 +183,10 @@ INITIALIZE_PASS_WITH_OPTIONS(Scalarizer, "scalarizer",
                              "Scalarize vector operations", false, false)
 
 Scatterer::Scatterer(BasicBlock *bb, BasicBlock::iterator bbi, Value *v,
-                     ValueVector *cachePtr)
+                     Type *VecTy, ValueVector *cachePtr)
   : BB(bb), BBI(bbi), V(v), CachePtr(cachePtr) {
-  Type *Ty = V->getType();
-  PtrTy = dyn_cast<PointerType>(Ty);
-  if (PtrTy)
-    Ty = PtrTy->getElementType();
-  Size = Ty->getVectorNumElements();
+  PtrTy = dyn_cast<PointerType>(V->getType());
+  Size = VecTy->getVectorNumElements();
   if (!CachePtr)
     Tmp.resize(Size, nullptr);
   else if (CachePtr->empty())
@@ -268,24 +265,26 @@ bool Scalarizer::runOnFunction(Function &F) {
 
 // Return a scattered form of V that can be accessed by Point.  V must be a
 // vector or a pointer to a vector.
-Scatterer Scalarizer::scatter(Instruction *Point, Value *V) {
+Scatterer Scalarizer::scatter(Instruction *Point, Value *V, Type *VecTy) {
+  if (!VecTy)
+    VecTy = V->getType();
   if (Argument *VArg = dyn_cast<Argument>(V)) {
     // Put the scattered form of arguments in the entry block,
     // so that it can be used everywhere.
     Function *F = VArg->getParent();
     BasicBlock *BB = &F->getEntryBlock();
-    return Scatterer(BB, BB->begin(), V, &Scattered[V]);
+    return Scatterer(BB, BB->begin(), V, VecTy, &Scattered[V]);
   }
   if (Instruction *VOp = dyn_cast<Instruction>(V)) {
     // Put the scattered form of an instruction directly after the
     // instruction.
     BasicBlock *BB = VOp->getParent();
     return Scatterer(BB, std::next(BasicBlock::iterator(VOp)),
-                     V, &Scattered[V]);
+                     V, VecTy, &Scattered[V]);
   }
   // In the fallback case, just put the scattered before Point and
   // keep the result local to Point.
-  return Scatterer(Point->getParent(), Point->getIterator(), V);
+  return Scatterer(Point->getParent(), Point->getIterator(), V, VecTy);
 }
 
 // Replace Op with the gathered form of the components in CV.  Defer the
@@ -601,7 +600,7 @@ bool Scalarizer::visitLoadInst(LoadInst &LI) {
 
   unsigned NumElems = Layout.VecTy->getNumElements();
   IRBuilder<> Builder(&LI);
-  Scatterer Ptr = scatter(&LI, LI.getPointerOperand());
+  Scatterer Ptr = scatter(&LI, LI.getPointerOperand(), LI.getType());
   ValueVector Res;
   Res.resize(NumElems);
 
@@ -620,13 +619,14 @@ bool Scalarizer::visitStoreInst(StoreInst &SI) {
 
   VectorLayout Layout;
   Value *FullValue = SI.getValueOperand();
-  if (!getVectorLayout(FullValue->getType(), SI.getAlignment(), Layout,
+  Type *ValTy = FullValue->getType();
+  if (!getVectorLayout(ValTy, SI.getAlignment(), Layout,
                        SI.getModule()->getDataLayout()))
     return false;
 
   unsigned NumElems = Layout.VecTy->getNumElements();
   IRBuilder<> Builder(&SI);
-  Scatterer Ptr = scatter(&SI, SI.getPointerOperand());
+  Scatterer Ptr = scatter(&SI, SI.getPointerOperand(), ValTy);
   Scatterer Val = scatter(&SI, FullValue);
 
   ValueVector Stores;

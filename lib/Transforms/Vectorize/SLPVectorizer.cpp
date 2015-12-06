@@ -442,6 +442,10 @@ private:
   /// \returns NULL if this is not a valid Load/Store instruction.
   static Value *getPointerOperand(Value *I);
 
+  /// \brief Take the acccessed type from the Load/Store instruction.
+  /// \returns NULL if this is not a valid Load/Store instruction.
+  static Type *getAccessType(Value *I);
+
   /// \brief Take the address space operand from the Load/Store instruction.
   /// \returns -1 if this is not a valid Load/Store instruction.
   static unsigned getAddressSpaceOperand(Value *I);
@@ -1845,6 +1849,14 @@ Value *BoUpSLP::getPointerOperand(Value *I) {
   return nullptr;
 }
 
+Type *BoUpSLP::getAccessType(Value *I) {
+  if (LoadInst *LI = dyn_cast<LoadInst>(I))
+    return LI->getType();
+  if (StoreInst *SI = dyn_cast<StoreInst>(I))
+    return SI->getValueOperand()->getType();
+  return nullptr;
+}
+
 unsigned BoUpSLP::getAddressSpaceOperand(Value *I) {
   if (LoadInst *L = dyn_cast<LoadInst>(I))
     return L->getPointerAddressSpace();
@@ -1864,11 +1876,13 @@ bool BoUpSLP::isConsecutiveAccess(Value *A, Value *B, const DataLayout &DL) {
     return false;
 
   // Make sure that A and B are different pointers of the same type.
-  if (PtrA == PtrB || PtrA->getType() != PtrB->getType())
+  Type *TyA = getAccessType(A);
+  Type *TyB = getAccessType(B);
+  if (PtrA == PtrB || TyA != TyB)
     return false;
 
   unsigned PtrBitWidth = DL.getPointerSizeInBits(ASA);
-  Type *Ty = cast<PointerType>(PtrA->getType())->getElementType();
+  Type *Ty = TyA;
   APInt Size(PtrBitWidth, DL.getTypeStoreSize(Ty));
 
   APInt OffsetA(PtrBitWidth, 0), OffsetB(PtrBitWidth, 0);

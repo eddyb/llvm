@@ -1143,7 +1143,9 @@ static bool isSafePHIToSpeculate(PHINode &PN) {
   // TODO: Allow recursive phi users.
   // TODO: Allow stores.
   BasicBlock *BB = PN.getParent();
+
   unsigned MaxAlign = 0;
+  uint64_t MaxSize = 0;
   bool HaveLoad = false;
   for (User *U : PN.users()) {
     LoadInst *LI = dyn_cast<LoadInst>(U);
@@ -1162,7 +1164,11 @@ static bool isSafePHIToSpeculate(PHINode &PN) {
       if (BBI->mayWriteToMemory())
         return false;
 
-    MaxAlign = std::max(MaxAlign, LI->getAlignment());
+    unsigned Align = LI->getActualAlignment();
+    uint64_t Size = LI->getLoadedSize();
+
+    MaxAlign = std::max(MaxAlign, Align);
+    MaxSize = std::max(MaxSize, Size);
     HaveLoad = true;
   }
 
@@ -1190,7 +1196,7 @@ static bool isSafePHIToSpeculate(PHINode &PN) {
     // If this pointer is always safe to load, or if we can prove that there
     // is already a load in the block, then we can move the load to the pred
     // block.
-    if (isSafeToLoadUnconditionally(InVal, MaxAlign, TI))
+    if (isSafeToLoadUnconditionally(InVal, MaxAlign, MaxSize, TI))
       continue;
 
     return false;
@@ -1258,18 +1264,22 @@ static void speculatePHINodeLoads(PHINode &PN) {
 static bool isSafeSelectToSpeculate(SelectInst &SI) {
   Value *TValue = SI.getTrueValue();
   Value *FValue = SI.getFalseValue();
+  uint64_t MaxTSize = 0, MaxFSize = 0;
 
   for (User *U : SI.users()) {
     LoadInst *LI = dyn_cast<LoadInst>(U);
     if (!LI || !LI->isSimple())
       return false;
 
+    unsigned Align = LI->getActualAlignment();
+    uint64_t Size = LI->getLoadedSize();
+
     // Both operands to the select need to be dereferencable, either
     // absolutely (e.g. allocas) or at this point because we can see other
     // accesses to it.
-    if (!isSafeToLoadUnconditionally(TValue, LI->getAlignment(), LI))
+    if (!isSafeToLoadUnconditionally(TValue, Align, Size, LI))
       return false;
-    if (!isSafeToLoadUnconditionally(FValue, LI->getAlignment(), LI))
+    if (!isSafeToLoadUnconditionally(FValue, Align, Size, LI))
       return false;
   }
 
@@ -1750,13 +1760,13 @@ static bool isVectorPromotionViableForSlice(Partition &P, const Slice &S,
     if (II->getIntrinsicID() != Intrinsic::lifetime_start &&
         II->getIntrinsicID() != Intrinsic::lifetime_end)
       return false;
-  } else if (U->get()->getType()->getPointerElementType()->isStructTy()) {
-    // Disable vector promotion when there are loads or stores of an FCA.
-    return false;
   } else if (LoadInst *LI = dyn_cast<LoadInst>(U->getUser())) {
     if (LI->isVolatile())
       return false;
     Type *LTy = LI->getType();
+    // Disable vector promotion when there are loads or stores of an FCA.
+    if (LTy->isStructTy())
+      return false;
     if (P.beginOffset() > S.beginOffset() || P.endOffset() < S.endOffset()) {
       assert(LTy->isIntegerTy());
       LTy = SplitIntTy;
@@ -1767,6 +1777,9 @@ static bool isVectorPromotionViableForSlice(Partition &P, const Slice &S,
     if (SI->isVolatile())
       return false;
     Type *STy = SI->getValueOperand()->getType();
+    // Disable vector promotion when there are loads or stores of an FCA.
+    if (STy->isStructTy())
+      return false;
     if (P.beginOffset() > S.beginOffset() || P.endOffset() < S.endOffset()) {
       assert(STy->isIntegerTy());
       STy = SplitIntTy;

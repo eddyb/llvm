@@ -85,7 +85,7 @@ namespace {
     bool isDenselyPacked(Type *type, const DataLayout &DL);
     bool canPaddingBeAccessed(Argument *Arg);
     CallGraphNode *PromoteArguments(CallGraphNode *CGN);
-    bool isSafeToPromoteArgument(Argument *Arg, bool isByVal,
+    bool isSafeToPromoteArgument(Argument *Arg, Type *ElemTy, bool isByVal,
                                  AAResults &AAR) const;
     CallGraphNode *DoPromotion(Function *F,
                               SmallPtrSetImpl<Argument*> &ArgsToPromote,
@@ -328,7 +328,7 @@ CallGraphNode *ArgPromotion::PromoteArguments(CallGraphNode *CGN) {
     }
     
     // Otherwise, see if we can promote the pointer to its value.
-    if (isSafeToPromoteArgument(PtrArg, PtrArg->hasByValOrInAllocaAttr(), AAR))
+    if (isSafeToPromoteArgument(PtrArg, AgTy, PtrArg->hasByValOrInAllocaAttr(), AAR))
       ArgsToPromote.insert(PtrArg);
   }
 
@@ -341,11 +341,12 @@ CallGraphNode *ArgPromotion::PromoteArguments(CallGraphNode *CGN) {
 
 /// AllCallersPassInValidPointerForArgument - Return true if we can prove that
 /// all callees pass in a valid pointer for the specified function argument.
-static bool AllCallersPassInValidPointerForArgument(Argument *Arg) {
+static bool AllCallersPassInValidPointerForArgument(Argument *Arg, Type *ElemTy) {
   Function *Callee = Arg->getParent();
   const DataLayout &DL = Callee->getParent()->getDataLayout();
 
   unsigned ArgNo = Arg->getArgNo();
+  uint64_t Size = DL.getTypeStoreSize(ElemTy);
 
   // Look at all call sites of the function.  At this pointer we know we only
   // have direct callees.
@@ -353,7 +354,7 @@ static bool AllCallersPassInValidPointerForArgument(Argument *Arg) {
     CallSite CS(U);
     assert(CS && "Should only have direct calls!");
 
-    if (!isDereferenceablePointer(CS.getArgument(ArgNo), DL))
+    if (!isDereferenceablePointer(CS.getArgument(ArgNo), Size, DL))
       return false;
   }
   return true;
@@ -428,7 +429,7 @@ static void MarkIndicesSafe(const ArgPromotion::IndicesVector &ToMark,
 /// This method limits promotion of aggregates to only promote up to three
 /// elements of the aggregate in order to avoid exploding the number of
 /// arguments passed in.
-bool ArgPromotion::isSafeToPromoteArgument(Argument *Arg,
+bool ArgPromotion::isSafeToPromoteArgument(Argument *Arg, Type *ElemTy,
                                            bool isByValOrInAlloca,
                                            AAResults &AAR) const {
   typedef std::set<IndicesVector> GEPIndicesSet;
@@ -462,7 +463,7 @@ bool ArgPromotion::isSafeToPromoteArgument(Argument *Arg,
   GEPIndicesSet ToPromote;
 
   // If the pointer is always valid, any load with first index 0 is valid.
-  if (isByValOrInAlloca || AllCallersPassInValidPointerForArgument(Arg))
+  if (isByValOrInAlloca || AllCallersPassInValidPointerForArgument(Arg, ElemTy))
     SafeToUnconditionallyLoad.insert(IndicesVector(1, 0));
 
   // First, iterate the entry block and mark loads of (geps of) arguments as
@@ -518,7 +519,7 @@ bool ArgPromotion::isSafeToPromoteArgument(Argument *Arg,
         // TODO: This runs the above loop over and over again for dead GEPs
         // Couldn't we just do increment the UI iterator earlier and erase the
         // use?
-        return isSafeToPromoteArgument(Arg, isByValOrInAlloca, AAR);
+        return isSafeToPromoteArgument(Arg, ElemTy, isByValOrInAlloca, AAR);
       }
 
       // Ensure that all of the indices are constants.

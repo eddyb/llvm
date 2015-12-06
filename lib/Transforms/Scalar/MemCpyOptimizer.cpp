@@ -146,6 +146,9 @@ struct MemsetRange {
   /// range.
   Value *StartPtr;
 
+  /// DestTy - The type used for writing to the start of the range.
+  Type *DestTy;
+
   /// Alignment - The known alignment of the first store.
   unsigned Alignment;
 
@@ -221,18 +224,24 @@ public:
   }
 
   void addStore(int64_t OffsetFromFirst, StoreInst *SI) {
-    int64_t StoreSize = DL.getTypeStoreSize(SI->getOperand(0)->getType());
+    Type *DestTy = SI->getValueOperand()->getType();
+    int64_t StoreSize = DL.getTypeStoreSize(DestTy);
 
     addRange(OffsetFromFirst, StoreSize,
-             SI->getPointerOperand(), SI->getAlignment(), SI);
+             SI->getPointerOperand(), DestTy,
+             SI->getAlignment(), SI);
   }
 
   void addMemSet(int64_t OffsetFromFirst, MemSetInst *MSI) {
+    Type *DestTy = Type::getInt8Ty(MSI->getContext());
     int64_t Size = cast<ConstantInt>(MSI->getLength())->getZExtValue();
-    addRange(OffsetFromFirst, Size, MSI->getDest(), MSI->getAlignment(), MSI);
+
+    addRange(OffsetFromFirst, Size, MSI->getDest(),
+             DestTy, MSI->getAlignment(), MSI);
   }
 
-  void addRange(int64_t Start, int64_t Size, Value *Ptr,
+  void addRange(int64_t Start, int64_t Size,
+                Value *Ptr, Type *DestTy,
                 unsigned Alignment, Instruction *Inst);
 
 };
@@ -243,7 +252,8 @@ public:
 /// Add a new store to the MemsetRanges data structure.  This adds a
 /// new range for the specified store at the specified offset, merging into
 /// existing ranges as appropriate.
-void MemsetRanges::addRange(int64_t Start, int64_t Size, Value *Ptr,
+void MemsetRanges::addRange(int64_t Start, int64_t Size,
+                            Value *Ptr, Type *DestTy,
                             unsigned Alignment, Instruction *Inst) {
   int64_t End = Start+Size;
 
@@ -258,6 +268,7 @@ void MemsetRanges::addRange(int64_t Start, int64_t Size, Value *Ptr,
     R.Start        = Start;
     R.End          = End;
     R.StartPtr     = Ptr;
+    R.DestTy       = DestTy;
     R.Alignment    = Alignment;
     R.TheStores.push_back(Inst);
     return;
@@ -280,6 +291,7 @@ void MemsetRanges::addRange(int64_t Start, int64_t Size, Value *Ptr,
   if (Start < I->Start) {
     I->Start = Start;
     I->StartPtr = Ptr;
+    I->DestTy = DestTy;
     I->Alignment = Alignment;
   }
 
@@ -453,11 +465,8 @@ Instruction *MemCpyOpt::tryMergingIntoMemset(Instruction *StartInst,
 
     // Determine alignment
     unsigned Alignment = Range.Alignment;
-    if (Alignment == 0) {
-      Type *EltType =
-        cast<PointerType>(StartPtr->getType())->getElementType();
-      Alignment = DL.getABITypeAlignment(EltType);
-    }
+    if (Alignment == 0)
+      Alignment = DL.getABITypeAlignment(Range.DestTy);
 
     AMemSet =
       Builder.CreateMemSet(StartPtr, ByteVal, Range.End-Range.Start, Alignment);
