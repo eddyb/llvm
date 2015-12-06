@@ -1236,7 +1236,7 @@ public:
   /// 0 - Stride is unknown or non-consecutive.
   /// 1 - Address is consecutive.
   /// -1 - Address is consecutive, and decreasing.
-  int isConsecutivePtr(Value *Ptr);
+  int isConsecutivePtr(Value *Ptr, Type *DataType = nullptr);
 
   /// Returns true if the value V is uniform within the loop.
   bool isUniform(Value *V);
@@ -1275,12 +1275,12 @@ public:
   /// Returns true if the target machine supports masked store operation
   /// for the given \p DataType and kind of access to \p Ptr.
   bool isLegalMaskedStore(Type *DataType, Value *Ptr) {
-    return isConsecutivePtr(Ptr) && TTI->isLegalMaskedStore(DataType);
+    return isConsecutivePtr(Ptr, DataType) && TTI->isLegalMaskedStore(DataType);
   }
   /// Returns true if the target machine supports masked load operation
   /// for the given \p DataType and kind of access to \p Ptr.
   bool isLegalMaskedLoad(Type *DataType, Value *Ptr) {
-    return isConsecutivePtr(Ptr) && TTI->isLegalMaskedLoad(DataType);
+    return isConsecutivePtr(Ptr, DataType) && TTI->isLegalMaskedLoad(DataType);
   }
   /// Returns true if vector representation of the instruction \p I
   /// requires mask.
@@ -1984,11 +1984,11 @@ Value *InnerLoopVectorizer::getStepVector(Value *Val, int StartIdx,
   return Builder.CreateAdd(Val, Step, "induction");
 }
 
-int LoopVectorizationLegality::isConsecutivePtr(Value *Ptr) {
+int LoopVectorizationLegality::isConsecutivePtr(Value *Ptr, Type *DataType) {
   assert(Ptr->getType()->isPointerTy() && "Unexpected non-ptr");
   auto *SE = PSE.getSE();
   // Make sure that the pointer does not point to structs.
-  if (cast<PointerType>(Ptr->getType())->getPointerElementType()->isAggregateType())
+  if (DataType && DataType->isAggregateType())
     return 0;
 
   // If this value is a pointer induction variable we know it is consecutive.
@@ -2010,8 +2010,7 @@ int LoopVectorizationLegality::isConsecutivePtr(Value *Ptr) {
   if (Phi && Inductions.count(Phi)) {
 
     // Make sure that the pointer does not point to structs.
-    PointerType *GepPtrType = cast<PointerType>(GpPtr->getType());
-    if (GepPtrType->getPointerElementType()->isAggregateType())
+    if (Gep->getSourceElementType()->isAggregateType())
       return 0;
 
     // Make sure that all of the index operands are loop invariant.
@@ -2381,7 +2380,7 @@ void InnerLoopVectorizer::vectorizeMemoryInstruction(Instruction *Instr) {
 
   // If the pointer is loop invariant or if it is non-consecutive,
   // scalarize the load.
-  int ConsecutiveStride = Legal->isConsecutivePtr(Ptr);
+  int ConsecutiveStride = Legal->isConsecutivePtr(Ptr, ScalarDataTy);
   bool Reverse = ConsecutiveStride < 0;
   bool UniformLoad = LI && Legal->isUniform(Ptr);
   if (!ConsecutiveStride || UniformLoad)
@@ -4581,7 +4580,8 @@ void InterleavedAccessInfo::collectConstStridedAccesses(
     StoreInst *SI = dyn_cast<StoreInst>(I);
 
     Value *Ptr = LI ? LI->getPointerOperand() : SI->getPointerOperand();
-    int Stride = isStridedPtr(PSE, Ptr, TheLoop, Strides);
+    Type *AccessTy = LI ? LI->getType() : SI->getValueOperand()->getType();
+    int Stride = isStridedPtr(PSE, Ptr, AccessTy, TheLoop, Strides);
 
     // The factor of the corresponding interleave group.
     unsigned Factor = std::abs(Stride);
@@ -4591,13 +4591,12 @@ void InterleavedAccessInfo::collectConstStridedAccesses(
       continue;
 
     const SCEV *Scev = replaceSymbolicStrideSCEV(PSE, Strides, Ptr);
-    PointerType *PtrTy = dyn_cast<PointerType>(Ptr->getType());
-    unsigned Size = DL.getTypeAllocSize(PtrTy->getPointerElementType());
+    unsigned Size = DL.getTypeAllocSize(AccessTy);
 
     // An alignment of 0 means target ABI alignment.
     unsigned Align = LI ? LI->getAlignment() : SI->getAlignment();
     if (!Align)
-      Align = DL.getABITypeAlignment(PtrTy->getPointerElementType());
+      Align = DL.getABITypeAlignment(AccessTy);
 
     StrideAccesses[I] = StrideDescriptor(Stride, Scev, Size, Align);
   }
@@ -5480,7 +5479,7 @@ LoopVectorizationCostModel::getInstructionCost(Instruction *I, unsigned VF) {
     }
 
     // Scalarized loads/stores.
-    int ConsecutiveStride = Legal->isConsecutivePtr(Ptr);
+    int ConsecutiveStride = Legal->isConsecutivePtr(Ptr, ValTy);
     bool Reverse = ConsecutiveStride < 0;
     const DataLayout &DL = I->getModule()->getDataLayout();
     unsigned ScalarAllocatedSize = DL.getTypeAllocSize(ValTy);
@@ -5623,12 +5622,14 @@ namespace llvm {
 
 bool LoopVectorizationCostModel::isConsecutiveLoadOrStore(Instruction *Inst) {
   // Check for a store.
-  if (StoreInst *ST = dyn_cast<StoreInst>(Inst))
-    return Legal->isConsecutivePtr(ST->getPointerOperand()) != 0;
+  if (StoreInst *ST = dyn_cast<StoreInst>(Inst)) {
+    Type *Ty = ST->getValueOperand()->getType();
+    return Legal->isConsecutivePtr(ST->getPointerOperand(), Ty) != 0;
+  }
 
   // Check for a load.
   if (LoadInst *LI = dyn_cast<LoadInst>(Inst))
-    return Legal->isConsecutivePtr(LI->getPointerOperand()) != 0;
+    return Legal->isConsecutivePtr(LI->getPointerOperand(), LI->getType()) != 0;
 
   return false;
 }

@@ -74,9 +74,8 @@ bool SITypeRewriter::runOnFunction(Function &F) {
 void SITypeRewriter::visitLoadInst(LoadInst &I) {
   Value *Ptr = I.getPointerOperand();
   Type *PtrTy = Ptr->getType();
-  Type *ElemTy = cast<PointerType>(PtrTy)->getPointerElementType();
   IRBuilder<> Builder(&I);
-  if (ElemTy == v16i8)  {
+  if (I.getType() == v16i8)  {
     Value *BitCast = Builder.CreateBitCast(Ptr,
         PointerType::get(v4i32,PtrTy->getPointerAddressSpace()));
     LoadInst *Load = Builder.CreateLoad(BitCast);

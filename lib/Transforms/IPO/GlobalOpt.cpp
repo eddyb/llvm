@@ -2188,10 +2188,10 @@ isSimpleEnoughValueToCommit(Constant *C,
 /// another pointer type, we punt.  We basically just support direct accesses to
 /// globals and GEP's of globals.  This should be kept up to date with
 /// CommitValueTo.
-static bool isSimpleEnoughPointerToCommit(Constant *C) {
+static bool isSimpleEnoughPointerToCommit(Constant *C, Type *ValTy) {
   // Conservatively, avoid aggregate types. This is because we don't
   // want to worry about them partially overlapping other stores.
-  if (!cast<PointerType>(C->getType())->getPointerElementType()->isSingleValueType())
+  if (!ValTy->isSingleValueType())
     return false;
 
   if (GlobalVariable *GV = dyn_cast<GlobalVariable>(C))
@@ -2428,19 +2428,20 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
         DEBUG(dbgs() << "Store is not simple! Can not evaluate.\n");
         return false;  // no volatile/atomic accesses.
       }
-      Constant *Ptr = getVal(SI->getOperand(1));
+      Constant *Ptr = getVal(SI->getPointerOperand());
       if (ConstantExpr *CE = dyn_cast<ConstantExpr>(Ptr)) {
         DEBUG(dbgs() << "Folding constant ptr expression: " << *Ptr);
         Ptr = ConstantFoldConstantExpression(CE, DL, TLI);
         DEBUG(dbgs() << "; To: " << *Ptr << "\n");
       }
-      if (!isSimpleEnoughPointerToCommit(Ptr)) {
+      Type *ValTy = SI->getValueOperand()->getType();
+      if (!isSimpleEnoughPointerToCommit(Ptr, ValTy)) {
         // If this is too complex for us to commit, reject it.
         DEBUG(dbgs() << "Pointer is too complex for us to evaluate store.");
         return false;
       }
 
-      Constant *Val = getVal(SI->getOperand(0));
+      Constant *Val = getVal(SI->getValueOperand());
 
       // If this might be too difficult for the backend to handle (e.g. the addr
       // of one global variable divided by another) then we can't commit it.

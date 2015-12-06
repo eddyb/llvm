@@ -94,7 +94,7 @@ struct ThreadSanitizer : public FunctionPass {
                                       SmallVectorImpl<Instruction *> &All,
                                       const DataLayout &DL);
   bool addrPointsToConstantData(Value *Addr);
-  int getMemoryAccessFuncIndex(Value *Addr, const DataLayout &DL);
+  int getMemoryAccessFuncIndex(Type *OrigTy, const DataLayout &DL);
 
   Type *IntptrTy;
   IntegerType *OrdTy;
@@ -410,7 +410,10 @@ bool ThreadSanitizer::instrumentLoadOrStore(Instruction *I,
   Value *Addr = IsWrite
       ? cast<StoreInst>(I)->getPointerOperand()
       : cast<LoadInst>(I)->getPointerOperand();
-  int Idx = getMemoryAccessFuncIndex(Addr, DL);
+  Type *OrigTy = IsWrite
+      ? cast<StoreInst>(I)->getValueOperand()->getType()
+      : cast<LoadInst>(I)->getType();
+  int Idx = getMemoryAccessFuncIndex(OrigTy, DL);
   if (Idx < 0)
     return false;
   if (IsWrite && isVtableAccess(I)) {
@@ -440,7 +443,6 @@ bool ThreadSanitizer::instrumentLoadOrStore(Instruction *I,
   const unsigned Alignment = IsWrite
       ? cast<StoreInst>(I)->getAlignment()
       : cast<LoadInst>(I)->getAlignment();
-  Type *OrigTy = cast<PointerType>(Addr->getType())->getPointerElementType();
   const uint32_t TypeSize = DL.getTypeStoreSizeInBits(OrigTy);
   Value *OnAccessFunc = nullptr;
   if (Alignment == 0 || Alignment >= 8 || (Alignment % (TypeSize / 8)) == 0)
@@ -508,7 +510,7 @@ bool ThreadSanitizer::instrumentAtomic(Instruction *I, const DataLayout &DL) {
   IRBuilder<> IRB(I);
   if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
     Value *Addr = LI->getPointerOperand();
-    int Idx = getMemoryAccessFuncIndex(Addr, DL);
+    int Idx = getMemoryAccessFuncIndex(LI->getType(), DL);
     if (Idx < 0)
       return false;
     const unsigned ByteSize = 1U << Idx;
@@ -522,7 +524,8 @@ bool ThreadSanitizer::instrumentAtomic(Instruction *I, const DataLayout &DL) {
 
   } else if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
     Value *Addr = SI->getPointerOperand();
-    int Idx = getMemoryAccessFuncIndex(Addr, DL);
+    Value *Val = SI->getValueOperand();
+    int Idx = getMemoryAccessFuncIndex(Val->getType(), DL);
     if (Idx < 0)
       return false;
     const unsigned ByteSize = 1U << Idx;
@@ -530,13 +533,14 @@ bool ThreadSanitizer::instrumentAtomic(Instruction *I, const DataLayout &DL) {
     Type *Ty = Type::getIntNTy(IRB.getContext(), BitSize);
     Type *PtrTy = Ty->getPointerTo();
     Value *Args[] = {IRB.CreatePointerCast(Addr, PtrTy),
-                     IRB.CreateIntCast(SI->getValueOperand(), Ty, false),
+                     IRB.CreateIntCast(Val, Ty, false),
                      createOrdering(&IRB, SI->getOrdering())};
     CallInst *C = CallInst::Create(TsanAtomicStore[Idx], Args);
     ReplaceInstWithInst(I, C);
   } else if (AtomicRMWInst *RMWI = dyn_cast<AtomicRMWInst>(I)) {
     Value *Addr = RMWI->getPointerOperand();
-    int Idx = getMemoryAccessFuncIndex(Addr, DL);
+    Value *Val = RMWI->getValOperand();
+    int Idx = getMemoryAccessFuncIndex(Val->getType(), DL);
     if (Idx < 0)
       return false;
     Function *F = TsanAtomicRMW[RMWI->getOperation()][Idx];
@@ -547,13 +551,14 @@ bool ThreadSanitizer::instrumentAtomic(Instruction *I, const DataLayout &DL) {
     Type *Ty = Type::getIntNTy(IRB.getContext(), BitSize);
     Type *PtrTy = Ty->getPointerTo();
     Value *Args[] = {IRB.CreatePointerCast(Addr, PtrTy),
-                     IRB.CreateIntCast(RMWI->getValOperand(), Ty, false),
+                     IRB.CreateIntCast(Val, Ty, false),
                      createOrdering(&IRB, RMWI->getOrdering())};
     CallInst *C = CallInst::Create(F, Args);
     ReplaceInstWithInst(I, C);
   } else if (AtomicCmpXchgInst *CASI = dyn_cast<AtomicCmpXchgInst>(I)) {
     Value *Addr = CASI->getPointerOperand();
-    int Idx = getMemoryAccessFuncIndex(Addr, DL);
+    Value *CmpVal = CASI->getCompareOperand();
+    int Idx = getMemoryAccessFuncIndex(CmpVal->getType(), DL);
     if (Idx < 0)
       return false;
     const unsigned ByteSize = 1U << Idx;
@@ -561,12 +566,12 @@ bool ThreadSanitizer::instrumentAtomic(Instruction *I, const DataLayout &DL) {
     Type *Ty = Type::getIntNTy(IRB.getContext(), BitSize);
     Type *PtrTy = Ty->getPointerTo();
     Value *Args[] = {IRB.CreatePointerCast(Addr, PtrTy),
-                     IRB.CreateIntCast(CASI->getCompareOperand(), Ty, false),
+                     IRB.CreateIntCast(CmpVal, Ty, false),
                      IRB.CreateIntCast(CASI->getNewValOperand(), Ty, false),
                      createOrdering(&IRB, CASI->getSuccessOrdering()),
                      createOrdering(&IRB, CASI->getFailureOrdering())};
     CallInst *C = IRB.CreateCall(TsanAtomicCAS[Idx], Args);
-    Value *Success = IRB.CreateICmpEQ(C, CASI->getCompareOperand());
+    Value *Success = IRB.CreateICmpEQ(C, CmpVal);
 
     Value *Res = IRB.CreateInsertValue(UndefValue::get(CASI->getType()), C, 0);
     Res = IRB.CreateInsertValue(Res, Success, 1);
@@ -583,10 +588,8 @@ bool ThreadSanitizer::instrumentAtomic(Instruction *I, const DataLayout &DL) {
   return true;
 }
 
-int ThreadSanitizer::getMemoryAccessFuncIndex(Value *Addr,
+int ThreadSanitizer::getMemoryAccessFuncIndex(Type *OrigTy,
                                               const DataLayout &DL) {
-  Type *OrigPtrTy = Addr->getType();
-  Type *OrigTy = cast<PointerType>(OrigPtrTy)->getPointerElementType();
   assert(OrigTy->isSized());
   uint32_t TypeSize = DL.getTypeStoreSizeInBits(OrigTy);
   if (TypeSize != 8  && TypeSize != 16 &&

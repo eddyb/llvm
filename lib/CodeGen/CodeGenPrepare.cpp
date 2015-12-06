@@ -3432,7 +3432,7 @@ static bool IsOperandAMemoryOperand(CallInst *CI, InlineAsm *IA, Value *OpVal,
 /// Add the ultimately found memory instructions to MemoryUses.
 static bool FindAllMemoryUses(
     Instruction *I,
-    SmallVectorImpl<std::pair<Instruction *, unsigned>> &MemoryUses,
+    SmallVectorImpl<Instruction *> &MemoryUses,
     SmallPtrSetImpl<Instruction *> &ConsideredInsts, const TargetMachine &TM) {
   // If we already considered this instruction, we're done.
   if (!ConsideredInsts.insert(I).second)
@@ -3447,14 +3447,14 @@ static bool FindAllMemoryUses(
     Instruction *UserI = cast<Instruction>(U.getUser());
 
     if (LoadInst *LI = dyn_cast<LoadInst>(UserI)) {
-      MemoryUses.push_back(std::make_pair(LI, U.getOperandNo()));
+      MemoryUses.push_back(LI);
       continue;
     }
 
     if (StoreInst *SI = dyn_cast<StoreInst>(UserI)) {
       unsigned opNo = U.getOperandNo();
       if (opNo == 0) return true; // Storing addr, not into addr.
-      MemoryUses.push_back(std::make_pair(SI, opNo));
+      MemoryUses.push_back(SI);
       continue;
     }
 
@@ -3554,7 +3554,7 @@ isProfitableToFoldIntoAddressingMode(Instruction *I, ExtAddrMode &AMBefore,
   // check to see if their addressing modes will include this instruction.  If
   // so, we can fold it into all uses, so it doesn't matter if it has multiple
   // uses.
-  SmallVector<std::pair<Instruction*,unsigned>, 16> MemoryUses;
+  SmallVector<Instruction*, 16> MemoryUses;
   SmallPtrSet<Instruction*, 16> ConsideredInsts;
   if (FindAllMemoryUses(I, MemoryUses, ConsideredInsts, TM))
     return false;  // Has a non-memory, non-foldable use!
@@ -3565,17 +3565,21 @@ isProfitableToFoldIntoAddressingMode(Instruction *I, ExtAddrMode &AMBefore,
   // *actually* fold the instruction.
   SmallVector<Instruction*, 32> MatchedAddrModeInsts;
   for (unsigned i = 0, e = MemoryUses.size(); i != e; ++i) {
-    Instruction *User = MemoryUses[i].first;
-    unsigned OpNo = MemoryUses[i].second;
+    Value *Address;
+    Type *AddressAccessTy;
+    unsigned AS;
 
-    // Get the access type of this use.  If the use isn't a pointer, we don't
-    // know what it accesses.
-    Value *Address = User->getOperand(OpNo);
-    PointerType *AddrTy = dyn_cast<PointerType>(Address->getType());
-    if (!AddrTy)
-      return false;
-    Type *AddressAccessTy = AddrTy->getPointerElementType();
-    unsigned AS = AddrTy->getAddressSpace();
+    Instruction *User = MemoryUses[i];
+    if (auto *LI = dyn_cast<LoadInst>(User)) {
+      Address = LI->getPointerOperand();
+      AddressAccessTy = LI->getType();
+      AS = LI->getPointerAddressSpace();
+    } else {
+      auto *SI = cast<StoreInst>(User);
+      Address = SI->getPointerOperand();
+      AddressAccessTy = SI->getValueOperand()->getType();
+      AS = SI->getPointerAddressSpace();
+    }
 
     // Do a match against the root of this address, ignoring profitability. This
     // will tell us if the addressing mode for the memory operation will

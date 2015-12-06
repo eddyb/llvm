@@ -62,14 +62,12 @@ static bool AreEquivalentAddressValues(const Value *A, const Value *B) {
 ///
 /// This uses the pointee type to determine how many bytes need to be safe to
 /// load from the pointer.
-bool llvm::isSafeToLoadUnconditionally(Value *V, unsigned Align,
+bool llvm::isSafeToLoadUnconditionally(Value *V,
+                                       unsigned MaxAlign, uint64_t MaxSize,
                                        Instruction *ScanFrom) {
   const DataLayout &DL = ScanFrom->getModule()->getDataLayout();
 
-  // Zero alignment means that the load has the ABI alignment for the target
-  if (Align == 0)
-    Align = DL.getABITypeAlignment(cast<PointerType>(V->getType())->getPointerElementType());
-  assert(isPowerOf2_32(Align));
+  assert(isPowerOf2_32(MaxAlign));
 
   int64_t ByteOffset = 0;
   Value *Base = V;
@@ -94,9 +92,6 @@ bool llvm::isSafeToLoadUnconditionally(Value *V, unsigned Align,
     }
   }
 
-  PointerType *AddrTy = cast<PointerType>(V->getType());
-  uint64_t LoadSize = DL.getTypeStoreSize(AddrTy->getPointerElementType());
-
   // If we found a base allocated type from either an alloca or global variable,
   // try to see if we are definitively within the allocated region. We need to
   // know the size of the base type and the loaded type to do anything in this
@@ -105,10 +100,10 @@ bool llvm::isSafeToLoadUnconditionally(Value *V, unsigned Align,
     if (BaseAlign == 0)
       BaseAlign = DL.getPrefTypeAlignment(BaseType);
 
-    if (Align <= BaseAlign) {
+    if (MaxAlign <= BaseAlign) {
       // Check if the load is within the bounds of the underlying object.
-      if (ByteOffset + LoadSize <= DL.getTypeAllocSize(BaseType) &&
-          ((ByteOffset % Align) == 0))
+      if (ByteOffset + MaxSize <= DL.getTypeAllocSize(BaseType) &&
+          ((ByteOffset % MaxAlign) == 0))
         return true;
     }
   }
@@ -135,20 +130,22 @@ bool llvm::isSafeToLoadUnconditionally(Value *V, unsigned Align,
       return false;
 
     Value *AccessedPtr;
+    Type *AccessedTy;
     unsigned AccessedAlign;
     if (LoadInst *LI = dyn_cast<LoadInst>(BBI)) {
       AccessedPtr = LI->getPointerOperand();
+      AccessedTy = LI->getType();
       AccessedAlign = LI->getAlignment();
     } else if (StoreInst *SI = dyn_cast<StoreInst>(BBI)) {
       AccessedPtr = SI->getPointerOperand();
+      AccessedTy = SI->getValueOperand()->getType();
       AccessedAlign = SI->getAlignment();
     } else
       continue;
 
-    Type *AccessedTy = cast<PointerType>(AccessedPtr->getType())->getPointerElementType();
     if (AccessedAlign == 0)
       AccessedAlign = DL.getABITypeAlignment(AccessedTy);
-    if (AccessedAlign < Align)
+    if (AccessedAlign < MaxAlign)
       continue;
 
     // Handle trivial cases.
@@ -156,7 +153,7 @@ bool llvm::isSafeToLoadUnconditionally(Value *V, unsigned Align,
       return true;
 
     if (AreEquivalentAddressValues(AccessedPtr->stripPointerCasts(), V) &&
-        LoadSize <= DL.getTypeStoreSize(AccessedTy))
+        MaxSize <= DL.getTypeStoreSize(AccessedTy))
       return true;
   }
   return false;
@@ -193,14 +190,15 @@ llvm::DefMaxInstsToScan("available-load-scan-limit", cl::init(6), cl::Hidden,
 /// If \c AATags is non-null and a load or store is found, the AA tags from the
 /// load or store are recorded there. If there are no AA tags or if no access is
 /// found, it is left unmodified.
-Value *llvm::FindAvailableLoadedValue(Value *Ptr, BasicBlock *ScanBB,
+Value *llvm::FindAvailableLoadedValue(LoadInst *Load, BasicBlock *ScanBB,
                                       BasicBlock::iterator &ScanFrom,
                                       unsigned MaxInstsToScan,
                                       AliasAnalysis *AA, AAMDNodes *AATags) {
   if (MaxInstsToScan == 0)
     MaxInstsToScan = ~0U;
 
-  Type *AccessTy = cast<PointerType>(Ptr->getType())->getPointerElementType();
+  Value *Ptr = Load->getPointerOperand();
+  Type *AccessTy = Load->getType();
 
   const DataLayout &DL = ScanBB->getModule()->getDataLayout();
 

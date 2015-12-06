@@ -264,6 +264,10 @@ public:
   SmallVector<Instruction *, 4> getInstructionsForAccess(Value *Ptr,
                                                          bool isWrite) const;
 
+  /// \brief Find the value type read or written via \p Ptr.
+  /// If no unified type if found, nullptr is returned.
+  Type *getTypeForAccess(Value *Ptr, bool isWrite) const;
+
 private:
   /// A wrapper around ScalarEvolution, used to add runtime SCEV checks, and
   /// applies dynamic knowledge to simplify SCEV expressions and convert them
@@ -656,8 +660,8 @@ const SCEV *replaceSymbolicStrideSCEV(PredicatedScalarEvolution &PSE,
 ///
 /// If necessary this method will version the stride of the pointer according
 /// to \p PtrToStride and therefore add a new predicate to \p Preds.
-int isStridedPtr(PredicatedScalarEvolution &PSE, Value *Ptr, const Loop *Lp,
-                 const ValueToValueMap &StridesMap);
+int isStridedPtr(PredicatedScalarEvolution &PSE, Value *Ptr, Type *AccessTy,
+                 const Loop *Lp, const ValueToValueMap &StridesMap);
 
 /// \brief This analysis provides dependence information for the memory accesses
 /// of a loop.
