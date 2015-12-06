@@ -430,19 +430,30 @@ public:
         PSE(PSE) {}
 
   /// \brief Register a load  and whether it is only read from.
-  void addLoad(MemoryLocation &Loc, bool IsReadOnly) {
+  void addLoad(MemoryLocation &Loc, Type *AccessTy, bool IsReadOnly) {
     Value *Ptr = const_cast<Value*>(Loc.Ptr);
     AST.add(Ptr, MemoryLocation::UnknownSize, Loc.AATags);
-    Accesses.insert(MemAccessInfo(Ptr, false));
+
+    auto KV = std::make_pair(MemAccessInfo(Ptr, false), AccessTy);
+    Type *&Ty = Accesses.insert(KV).first->second;
+    // If we had a type and it differs from the current one, clear it.
+    if (Ty && Ty != AccessTy)
+      Ty = nullptr;
+
     if (IsReadOnly)
       ReadOnlyPtr.insert(Ptr);
   }
 
   /// \brief Register a store.
-  void addStore(MemoryLocation &Loc) {
+  void addStore(MemoryLocation &Loc, Type *AccessTy) {
     Value *Ptr = const_cast<Value*>(Loc.Ptr);
     AST.add(Ptr, MemoryLocation::UnknownSize, Loc.AATags);
-    Accesses.insert(MemAccessInfo(Ptr, true));
+
+    auto KV = std::make_pair(MemAccessInfo(Ptr, true), AccessTy);
+    Type *&Ty = Accesses.insert(KV).first->second;
+    // If we had a type and it differs from the current one, clear it.
+    if (Ty && Ty != AccessTy)
+      Ty = nullptr;
   }
 
   /// \brief Check whether we can check the pointers at runtime for
@@ -482,8 +493,8 @@ private:
   /// are needed and build sets of dependency check candidates.
   void processMemAccesses();
 
-  /// Set of all accesses.
-  PtrAccessSet Accesses;
+  /// Map from all accesses to their value type.
+  MapVector<MemAccessInfo, Type *> Accesses;
 
   const DataLayout &DL;
 
@@ -560,6 +571,7 @@ bool AccessAnalysis::canCheckPtrAtRT(RuntimePointerChecking &RtCheck,
       Value *Ptr = A.getValue();
       bool IsWrite = Accesses.count(MemAccessInfo(Ptr, true));
       MemAccessInfo Access(Ptr, IsWrite);
+      Type *AccessTy = Accesses.lookup(Access);
 
       if (IsWrite)
         ++NumWritePtrChecks;
@@ -569,8 +581,8 @@ bool AccessAnalysis::canCheckPtrAtRT(RuntimePointerChecking &RtCheck,
       if (hasComputableBounds(PSE, StridesMap, Ptr, TheLoop) &&
           // When we run after a failing dependency check we have to make sure
           // we don't have wrapping pointers.
-          (!ShouldCheckStride ||
-           isStridedPtr(PSE, Ptr, TheLoop, StridesMap) == 1)) {
+          (!ShouldCheckStride || (AccessTy &&
+           isStridedPtr(PSE, Ptr, AccessTy, TheLoop, StridesMap) == 1))) {
         // The id of the dependence set.
         unsigned DepId;
 
@@ -660,10 +672,13 @@ void AccessAnalysis::processMemAccesses() {
   DEBUG(dbgs() << "  AST: "; AST.dump());
   DEBUG(dbgs() << "LAA:   Accesses(" << Accesses.size() << "):\n");
   DEBUG({
-    for (auto A : Accesses)
-      dbgs() << "\t" << *A.getPointer() << " (" <<
-                (A.getInt() ? "write" : (ReadOnlyPtr.count(A.getPointer()) ?
-                                         "read-only" : "read")) << ")\n";
+    for (auto A : Accesses) {
+      MemAccessInfo Access = A.first;
+      dbgs() << "\t" << *Access.getPointer() << " (" <<
+                (Access.getInt() ? "write" :
+                    (ReadOnlyPtr.count(Access.getPointer()) ?
+                                       "read-only" : "read")) << ")\n";
+    }
   });
 
   // The AliasSetTracker has nicely partitioned our pointers by metadata
@@ -686,78 +701,128 @@ void AccessAnalysis::processMemAccesses() {
 
     // Iterate over each alias set twice, once to process read/write pointers,
     // and then to process read-only pointers.
-    for (int SetIteration = 0; SetIteration < 2; ++SetIteration) {
-      bool UseDeferred = SetIteration > 0;
-      PtrAccessSet &S = UseDeferred ? DeferredAccesses : Accesses;
+    for (auto AV : AS) {
+      Value *Ptr = AV.getValue();
 
-      for (auto AV : AS) {
-        Value *Ptr = AV.getValue();
+      // For a single memory access in AliasSetTracker, Accesses may contain
+      // both read and write, and they both need to be handled for CheckDeps.
+      for (auto AC : Accesses) {
+        if (AC.first.getPointer() != Ptr)
+          continue;
 
-        // For a single memory access in AliasSetTracker, Accesses may contain
-        // both read and write, and they both need to be handled for CheckDeps.
-        for (auto AC : S) {
-          if (AC.getPointer() != Ptr)
+        bool IsWrite = AC.first.getInt();
+        bool IsReadOnlyPtr = ReadOnlyPtr.count(Ptr) && !IsWrite;
+        // The pointer must be in the PtrAccessSet, either as a
+        // read or a write.
+        assert((IsWrite || Accesses.count(MemAccessInfo(Ptr, false))) &&
+                "Alias-set pointer not in the access set?");
+
+        MemAccessInfo Access(Ptr, IsWrite);
+        DepCands.insert(Access);
+
+        // Memorize read-only pointers for later processing and skip them in
+        // the first round (they need to be checked after we have seen all
+        // write pointers). Note: we also mark pointer that are not
+        // consecutive as "read-only" pointers (so that we check
+        // "a[b[i]] +="). Hence, we need the second check for "!IsWrite".
+        if (IsReadOnlyPtr) {
+          DeferredAccesses.insert(Access);
+          continue;
+        }
+
+        // If this is a write - check other reads and writes for conflicts. If
+        // this is a read only check other writes for conflicts (but only if
+        // there is no other write to the ptr - this is an optimization to
+        // catch "a[i] = a[i] + " without having to do a dependence check).
+        if ((IsWrite || IsReadOnlyPtr) && SetHasWrite) {
+          CheckDeps.insert(Access);
+          IsRTCheckAnalysisNeeded = true;
+        }
+
+        if (IsWrite)
+          SetHasWrite = true;
+
+        // Create sets of pointers connected by a shared alias set and
+        // underlying object.
+        typedef SmallVector<Value *, 16> ValueVector;
+        ValueVector TempObjects;
+
+        GetUnderlyingObjects(Ptr, TempObjects, DL, LI);
+        DEBUG(dbgs() << "Underlying objects for pointer " << *Ptr << "\n");
+        for (Value *UnderlyingObj : TempObjects) {
+          // nullptr never alias, don't join sets for pointer that have "null"
+          // in their UnderlyingObjects list.
+          if (isa<ConstantPointerNull>(UnderlyingObj))
             continue;
 
-          bool IsWrite = AC.getInt();
+          UnderlyingObjToAccessMap::iterator Prev =
+              ObjToLastAccess.find(UnderlyingObj);
+          if (Prev != ObjToLastAccess.end())
+            DepCands.unionSets(Access, Prev->second);
 
-          // If we're using the deferred access set, then it contains only
-          // reads.
-          bool IsReadOnlyPtr = ReadOnlyPtr.count(Ptr) && !IsWrite;
-          if (UseDeferred && !IsReadOnlyPtr)
+          ObjToLastAccess[UnderlyingObj] = Access;
+          DEBUG(dbgs() << "  " << *UnderlyingObj << "\n");
+        }
+      }
+    }
+
+    for (auto AV : AS) {
+      Value *Ptr = AV.getValue();
+
+      // For a single memory access in AliasSetTracker, Accesses may contain
+      // both read and write, and they both need to be handled for CheckDeps.
+      for (auto AC : DeferredAccesses) {
+        if (AC.getPointer() != Ptr)
+          continue;
+
+        bool IsWrite = AC.getInt();
+
+        // If we're using the deferred access set, then it contains only
+        // reads.
+        bool IsReadOnlyPtr = ReadOnlyPtr.count(Ptr) && !IsWrite;
+        if (!IsReadOnlyPtr)
+          continue;
+        // Otherwise, the pointer must be in the PtrAccessSet, either as a
+        // read or a write.
+        assert((IsReadOnlyPtr || IsWrite ||
+                DeferredAccesses.count(MemAccessInfo(Ptr, false))) &&
+                "Alias-set pointer not in the access set?");
+
+        MemAccessInfo Access(Ptr, IsWrite);
+        DepCands.insert(Access);
+
+        // If this is a write - check other reads and writes for conflicts. If
+        // this is a read only check other writes for conflicts (but only if
+        // there is no other write to the ptr - this is an optimization to
+        // catch "a[i] = a[i] + " without having to do a dependence check).
+        if ((IsWrite || IsReadOnlyPtr) && SetHasWrite) {
+          CheckDeps.insert(Access);
+          IsRTCheckAnalysisNeeded = true;
+        }
+
+        if (IsWrite)
+          SetHasWrite = true;
+
+        // Create sets of pointers connected by a shared alias set and
+        // underlying object.
+        typedef SmallVector<Value *, 16> ValueVector;
+        ValueVector TempObjects;
+
+        GetUnderlyingObjects(Ptr, TempObjects, DL, LI);
+        DEBUG(dbgs() << "Underlying objects for pointer " << *Ptr << "\n");
+        for (Value *UnderlyingObj : TempObjects) {
+          // nullptr never alias, don't join sets for pointer that have "null"
+          // in their UnderlyingObjects list.
+          if (isa<ConstantPointerNull>(UnderlyingObj))
             continue;
-          // Otherwise, the pointer must be in the PtrAccessSet, either as a
-          // read or a write.
-          assert(((IsReadOnlyPtr && UseDeferred) || IsWrite ||
-                  S.count(MemAccessInfo(Ptr, false))) &&
-                 "Alias-set pointer not in the access set?");
 
-          MemAccessInfo Access(Ptr, IsWrite);
-          DepCands.insert(Access);
+          UnderlyingObjToAccessMap::iterator Prev =
+              ObjToLastAccess.find(UnderlyingObj);
+          if (Prev != ObjToLastAccess.end())
+            DepCands.unionSets(Access, Prev->second);
 
-          // Memorize read-only pointers for later processing and skip them in
-          // the first round (they need to be checked after we have seen all
-          // write pointers). Note: we also mark pointer that are not
-          // consecutive as "read-only" pointers (so that we check
-          // "a[b[i]] +="). Hence, we need the second check for "!IsWrite".
-          if (!UseDeferred && IsReadOnlyPtr) {
-            DeferredAccesses.insert(Access);
-            continue;
-          }
-
-          // If this is a write - check other reads and writes for conflicts. If
-          // this is a read only check other writes for conflicts (but only if
-          // there is no other write to the ptr - this is an optimization to
-          // catch "a[i] = a[i] + " without having to do a dependence check).
-          if ((IsWrite || IsReadOnlyPtr) && SetHasWrite) {
-            CheckDeps.insert(Access);
-            IsRTCheckAnalysisNeeded = true;
-          }
-
-          if (IsWrite)
-            SetHasWrite = true;
-
-          // Create sets of pointers connected by a shared alias set and
-          // underlying object.
-          typedef SmallVector<Value *, 16> ValueVector;
-          ValueVector TempObjects;
-
-          GetUnderlyingObjects(Ptr, TempObjects, DL, LI);
-          DEBUG(dbgs() << "Underlying objects for pointer " << *Ptr << "\n");
-          for (Value *UnderlyingObj : TempObjects) {
-            // nullptr never alias, don't join sets for pointer that have "null"
-            // in their UnderlyingObjects list.
-            if (isa<ConstantPointerNull>(UnderlyingObj))
-              continue;
-
-            UnderlyingObjToAccessMap::iterator Prev =
-                ObjToLastAccess.find(UnderlyingObj);
-            if (Prev != ObjToLastAccess.end())
-              DepCands.unionSets(Access, Prev->second);
-
-            ObjToLastAccess[UnderlyingObj] = Access;
-            DEBUG(dbgs() << "  " << *UnderlyingObj << "\n");
-          }
+          ObjToLastAccess[UnderlyingObj] = Access;
+          DEBUG(dbgs() << "  " << *UnderlyingObj << "\n");
         }
       }
     }
@@ -819,14 +884,10 @@ static bool isNoWrapAddRec(Value *Ptr, const SCEVAddRecExpr *AR,
 }
 
 /// \brief Check whether the access through \p Ptr has a constant stride.
-int llvm::isStridedPtr(PredicatedScalarEvolution &PSE, Value *Ptr,
+int llvm::isStridedPtr(PredicatedScalarEvolution &PSE, Value *Ptr, Type *AccessTy,
                        const Loop *Lp, const ValueToValueMap &StridesMap) {
-  Type *Ty = Ptr->getType();
-  assert(Ty->isPointerTy() && "Unexpected non-ptr");
-
   // Make sure that the pointer does not point to aggregate types.
-  auto *PtrTy = cast<PointerType>(Ty);
-  if (PtrTy->getPointerElementType()->isAggregateType()) {
+  if (AccessTy->isAggregateType()) {
     DEBUG(dbgs() << "LAA: Bad stride - Not a pointer to a scalar type"
           << *Ptr << "\n");
     return 0;
@@ -854,9 +915,10 @@ int llvm::isStridedPtr(PredicatedScalarEvolution &PSE, Value *Ptr,
   // An getelementptr without an inbounds attribute and unit stride would have
   // to access the pointer value "0" which is undefined behavior in address
   // space 0, therefore we can also vectorize this case.
+  Type *Ty = Ptr->getType();
   bool IsInBoundsGEP = isInBoundsGep(Ptr);
   bool IsNoWrapAddRec = isNoWrapAddRec(Ptr, AR, PSE.getSE(), Lp);
-  bool IsInAddressSpaceZero = PtrTy->getAddressSpace() == 0;
+  bool IsInAddressSpaceZero = cast<PointerType>(Ty)->getAddressSpace() == 0;
   if (!IsNoWrapAddRec && !IsInBoundsGEP && !IsInAddressSpaceZero) {
     DEBUG(dbgs() << "LAA: Bad stride - Pointer may wrap in the address space "
                  << *Ptr << " SCEV: " << *PtrScev << "\n");
@@ -875,7 +937,7 @@ int llvm::isStridedPtr(PredicatedScalarEvolution &PSE, Value *Ptr,
   }
 
   auto &DL = Lp->getHeader()->getModule()->getDataLayout();
-  int64_t Size = DL.getTypeAllocSize(PtrTy->getPointerElementType());
+  int64_t Size = DL.getTypeAllocSize(AccessTy);
   const APInt &APStepVal = C->getAPInt();
 
   // Huge step value - give up.
@@ -1050,8 +1112,16 @@ MemoryDepChecker::isDependent(const MemAccessInfo &A, unsigned AIdx,
   const SCEV *AScev = replaceSymbolicStrideSCEV(PSE, Strides, APtr);
   const SCEV *BScev = replaceSymbolicStrideSCEV(PSE, Strides, BPtr);
 
-  int StrideAPtr = isStridedPtr(PSE, APtr, InnermostLoop, Strides);
-  int StrideBPtr = isStridedPtr(PSE, BPtr, InnermostLoop, Strides);
+  Type *ATy = getTypeForAccess(APtr, AIsWrite);
+  Type *BTy = getTypeForAccess(BPtr, BIsWrite);
+
+  if (!ATy || !BTy) {
+    DEBUG(dbgs() << "Pointer access with varying load/store type\n");
+    return Dependence::Unknown;
+  }
+
+  int StrideAPtr = isStridedPtr(PSE, APtr, ATy, InnermostLoop, Strides);
+  int StrideBPtr = isStridedPtr(PSE, BPtr, BTy, InnermostLoop, Strides);
 
   const SCEV *Src = AScev;
   const SCEV *Sink = BScev;
@@ -1090,8 +1160,6 @@ MemoryDepChecker::isDependent(const MemAccessInfo &A, unsigned AIdx,
     return Dependence::Unknown;
   }
 
-  Type *ATy = cast<PointerType>(APtr->getType())->getPointerElementType();
-  Type *BTy = cast<PointerType>(BPtr->getType())->getPointerElementType();
   auto &DL = InnermostLoop->getHeader()->getModule()->getDataLayout();
   unsigned TypeByteSize = DL.getTypeAllocSize(ATy);
 
@@ -1290,6 +1358,26 @@ MemoryDepChecker::getInstructionsForAccess(Value *Ptr, bool isWrite) const {
   return Insts;
 }
 
+Type *MemoryDepChecker::getTypeForAccess(Value *Ptr, bool isWrite) const {
+  MemAccessInfo Access(Ptr, isWrite);
+  Type *Ty = nullptr;
+  for (auto Idx : Accesses.find(Access)->second) {
+    Type *AccessTy;
+    Instruction *I = InstMap[Idx];
+    if (isWrite)
+      AccessTy = cast<StoreInst>(I)->getValueOperand()->getType();
+    else
+      AccessTy = cast<LoadInst>(I)->getType();
+
+    // Make sure that the types are identical.
+    if (Ty && Ty != AccessTy)
+      return nullptr;
+
+    Ty = AccessTy;
+  }
+  return Ty;
+}
+
 const char *MemoryDepChecker::Dependence::DepName[] = {
     "NoDep", "Unknown", "Forward", "ForwardButPreventsForwarding", "Backward",
     "BackwardVectorizable", "BackwardVectorizableButPreventsForwarding"};
@@ -1475,7 +1563,7 @@ void LoopAccessInfo::analyzeLoop(const ValueToValueMap &Strides) {
       if (blockNeedsPredication(ST->getParent(), TheLoop, DT))
         Loc.AATags.TBAA = nullptr;
 
-      Accesses.addStore(Loc);
+      Accesses.addStore(Loc, ST->getValueOperand()->getType());
     }
   }
 
@@ -1499,7 +1587,8 @@ void LoopAccessInfo::analyzeLoop(const ValueToValueMap &Strides) {
     // read a few words, modify, and write a few words, and some of the
     // words may be written to the same address.
     bool IsReadOnlyPtr = false;
-    if (Seen.insert(Ptr).second || !isStridedPtr(PSE, Ptr, TheLoop, Strides)) {
+    if (Seen.insert(Ptr).second ||
+        !isStridedPtr(PSE, Ptr, LD->getType(), TheLoop, Strides)) {
       ++NumReads;
       IsReadOnlyPtr = true;
     }
@@ -1511,7 +1600,7 @@ void LoopAccessInfo::analyzeLoop(const ValueToValueMap &Strides) {
     if (blockNeedsPredication(LD->getParent(), TheLoop, DT))
       Loc.AATags.TBAA = nullptr;
 
-    Accesses.addLoad(Loc, IsReadOnlyPtr);
+    Accesses.addLoad(Loc, LD->getType(), IsReadOnlyPtr);
   }
 
   // If we write (or read-write) to a single destination and there are no

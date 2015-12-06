@@ -1778,7 +1778,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
       II->addAttribute(AttributeSet::ReturnIndex, Attribute::NonNull);
 
     // isDereferenceablePointer -> deref attribute
-    if (isDereferenceablePointer(DerivedPtr, DL)) {
+    if (isDereferenceablePointer(DerivedPtr, 1, DL)) {
       if (Argument *A = dyn_cast<Argument>(DerivedPtr)) {
         uint64_t Bytes = A->getDereferenceableBytes();
         II->addDereferenceableAttr(AttributeSet::ReturnIndex, Bytes);

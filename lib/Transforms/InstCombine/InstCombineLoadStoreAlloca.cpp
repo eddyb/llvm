@@ -791,7 +791,7 @@ Instruction *InstCombiner::visitLoadInst(LoadInst &LI) {
   BasicBlock::iterator BBI(LI);
   AAMDNodes AATags;
   if (Value *AvailableVal =
-      FindAvailableLoadedValue(Op, LI.getParent(), BBI,
+      FindAvailableLoadedValue(&LI, LI.getParent(), BBI,
                                DefMaxInstsToScan, AA, &AATags)) {
     if (LoadInst *NLI = dyn_cast<LoadInst>(AvailableVal)) {
       unsigned KnownIDs[] = {
@@ -849,15 +849,15 @@ Instruction *InstCombiner::visitLoadInst(LoadInst &LI) {
     //
     if (SelectInst *SI = dyn_cast<SelectInst>(Op)) {
       // load (select (Cond, &V1, &V2))  --> select(Cond, load &V1, load &V2).
-      unsigned Align = LI.getAlignment();
-      if (isSafeToLoadUnconditionally(SI->getOperand(1), SI, Align) &&
-          isSafeToLoadUnconditionally(SI->getOperand(2), SI, Align)) {
+      uint64_t Size = DL.getTypeStoreSize(LI.getType());
+      if (isSafeToLoadUnconditionally(SI->getOperand(1), SI, EffectiveLoadAlign, Size) &&
+          isSafeToLoadUnconditionally(SI->getOperand(2), SI, EffectiveLoadAlign, Size)) {
         LoadInst *V1 = Builder->CreateLoad(SI->getOperand(1),
                                            SI->getOperand(1)->getName()+".val");
         LoadInst *V2 = Builder->CreateLoad(SI->getOperand(2),
                                            SI->getOperand(2)->getName()+".val");
-        V1->setAlignment(Align);
-        V2->setAlignment(Align);
+        V1->setAlignment(LoadAlign);
+        V2->setAlignment(LoadAlign);
         return SelectInst::Create(SI->getCondition(), V1, V2);
       }
 

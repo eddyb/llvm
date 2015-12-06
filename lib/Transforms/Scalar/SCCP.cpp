@@ -1079,7 +1079,7 @@ void SCCPSolver::visitLoadInst(LoadInst &I) {
   }
 
   // Transform load from a constant into a constant if possible.
-  if (Constant *C = ConstantFoldLoadFromConstPtr(Ptr, DL))
+  if (Constant *C = ConstantFoldLoadFromConstPtr(Ptr, I.getType(), DL))
     return markConstant(IV, &I, C);
 
   // Otherwise we cannot say for certain what value this load will produce.

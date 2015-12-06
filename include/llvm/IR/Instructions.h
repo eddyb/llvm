@@ -292,6 +292,12 @@ public:
     return getPointerOperand()->getType()->getPointerAddressSpace();
   }
 
+  /// \brief Returns the explicit aligment, if present, or the ABI one.
+  unsigned getActualAlignment() const;
+
+  /// \brief Returns the size in bytes of the loaded value.
+  uint64_t getLoadedSize() const;
+
   // Methods for support type inquiry through isa, cast, and dyn_cast:
   static inline bool classof(const Instruction *I) {
     return I->getOpcode() == Instruction::Load;

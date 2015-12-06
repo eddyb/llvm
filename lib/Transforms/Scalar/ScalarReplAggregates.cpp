@@ -1137,24 +1137,27 @@ public:
 /// the select can be loaded unconditionally.
 static bool isSafeSelectToSpeculate(SelectInst *SI) {
   const DataLayout &DL = SI->getModule()->getDataLayout();
-  bool TDerefable = isDereferenceablePointer(SI->getTrueValue(), DL);
-  bool FDerefable = isDereferenceablePointer(SI->getFalseValue(), DL);
+  uint64_t MaxTSize = 0, MaxFSize = 0;
 
   for (User *U : SI->users()) {
     LoadInst *LI = dyn_cast<LoadInst>(U);
     if (!LI || !LI->isSimple()) return false;
 
+    unsigned Align = LI->getActualAlignment();
+    uint64_t Size = LI->getLoadedSize();
+
     // Both operands to the select need to be dereferencable, either absolutely
     // (e.g. allocas) or at this point because we can see other accesses to it.
-    if (!TDerefable &&
-        !isSafeToLoadUnconditionally(SI->getTrueValue(), LI,
-                                     LI->getAlignment()))
-      return false;
-    if (!FDerefable &&
-        !isSafeToLoadUnconditionally(SI->getFalseValue(), LI,
-                                     LI->getAlignment()))
-      return false;
+    if (!isSafeToLoadUnconditionally(SI->getTrueValue(), LI, Align, Size))
+      MaxTSize = std::max(MaxTSize, Size);
+    if (!isSafeToLoadUnconditionally(SI->getFalseValue(), LI, Align, Size))
+      MaxFSize = std::max(MaxFSize, Size);
   }
+
+  if (MaxTSize && !isDereferenceablePointer(SI->getTrueValue(), MaxTSize, DL))
+    return false;
+  if (MaxFSize && !isDereferenceablePointer(SI->getFalseValue(), MaxFSize, DL))
+    return false;
 
   return true;
 }
@@ -1181,7 +1184,10 @@ static bool isSafePHIToSpeculate(PHINode *PN) {
   // TODO: Allow recursive phi users.
   // TODO: Allow stores.
   BasicBlock *BB = PN->getParent();
+  const DataLayout &DL = PN->getModule()->getDataLayout();
+
   unsigned MaxAlign = 0;
+  uint64_t MaxSize = 0;
   for (User *U : PN->users()) {
     LoadInst *LI = dyn_cast<LoadInst>(U);
     if (!LI || !LI->isSimple()) return false;
@@ -1196,10 +1202,12 @@ static bool isSafePHIToSpeculate(PHINode *PN) {
       if (BBI->mayWriteToMemory())
         return false;
 
-    MaxAlign = std::max(MaxAlign, LI->getAlignment());
-  }
+    unsigned Align = LI->getActualAlignment();
+    uint64_t Size = LI->getLoadedSize();
 
-  const DataLayout &DL = PN->getModule()->getDataLayout();
+    MaxAlign = std::max(MaxAlign, Align);
+    MaxSize = std::max(MaxSize, Size);
+  }
 
   // Okay, we know that we have one or more loads in the same block as the PHI.
   // We can transform this if it is safe to push the loads into the predecessor
@@ -1225,8 +1233,9 @@ static bool isSafePHIToSpeculate(PHINode *PN) {
 
     // If this pointer is always safe to load, or if we can prove that there is
     // already a load in the block, then we can move the load to the pred block.
-    if (isDereferenceablePointer(InVal, DL) ||
-        isSafeToLoadUnconditionally(InVal, Pred->getTerminator(), MaxAlign))
+    if (isDereferenceablePointer(InVal, MaxSize, DL) ||
+        isSafeToLoadUnconditionally(InVal, Pred->getTerminator(),
+                                    MaxAlign, MaxSize))
       continue;
 
     return false;

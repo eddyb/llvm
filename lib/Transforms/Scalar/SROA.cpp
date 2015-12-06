@@ -1143,7 +1143,10 @@ static bool isSafePHIToSpeculate(PHINode &PN) {
   // TODO: Allow recursive phi users.
   // TODO: Allow stores.
   BasicBlock *BB = PN.getParent();
+  const DataLayout &DL = PN.getModule()->getDataLayout();
+
   unsigned MaxAlign = 0;
+  uint64_t MaxSize = 0;
   bool HaveLoad = false;
   for (User *U : PN.users()) {
     LoadInst *LI = dyn_cast<LoadInst>(U);
@@ -1162,14 +1165,16 @@ static bool isSafePHIToSpeculate(PHINode &PN) {
       if (BBI->mayWriteToMemory())
         return false;
 
-    MaxAlign = std::max(MaxAlign, LI->getAlignment());
+    unsigned Align = LI->getActualAlignment();
+    uint64_t Size = LI->getLoadedSize();
+
+    MaxAlign = std::max(MaxAlign, Align);
+    MaxSize = std::max(MaxSize, Size);
     HaveLoad = true;
   }
 
   if (!HaveLoad)
     return false;
-
-  const DataLayout &DL = PN.getModule()->getDataLayout();
 
   // We can only transform this if it is safe to push the loads into the
   // predecessor blocks. The only thing to watch out for is that we can't put
@@ -1192,8 +1197,8 @@ static bool isSafePHIToSpeculate(PHINode &PN) {
     // If this pointer is always safe to load, or if we can prove that there
     // is already a load in the block, then we can move the load to the pred
     // block.
-    if (isDereferenceablePointer(InVal, DL) ||
-        isSafeToLoadUnconditionally(InVal, TI, MaxAlign))
+    if (isDereferenceablePointer(InVal, MaxSize, DL) ||
+        isSafeToLoadUnconditionally(InVal, TI, MaxAlign, MaxSize))
       continue;
 
     return false;
@@ -1261,25 +1266,30 @@ static void speculatePHINodeLoads(PHINode &PN) {
 static bool isSafeSelectToSpeculate(SelectInst &SI) {
   Value *TValue = SI.getTrueValue();
   Value *FValue = SI.getFalseValue();
+  uint64_t MaxTSize = 0, MaxFSize = 0;
   const DataLayout &DL = SI.getModule()->getDataLayout();
-  bool TDerefable = isDereferenceablePointer(TValue, DL);
-  bool FDerefable = isDereferenceablePointer(FValue, DL);
 
   for (User *U : SI.users()) {
     LoadInst *LI = dyn_cast<LoadInst>(U);
     if (!LI || !LI->isSimple())
       return false;
 
+    unsigned Align = LI->getActualAlignment();
+    uint64_t Size = LI->getLoadedSize();
+
     // Both operands to the select need to be dereferencable, either
     // absolutely (e.g. allocas) or at this point because we can see other
     // accesses to it.
-    if (!TDerefable &&
-        !isSafeToLoadUnconditionally(TValue, LI, LI->getAlignment()))
-      return false;
-    if (!FDerefable &&
-        !isSafeToLoadUnconditionally(FValue, LI, LI->getAlignment()))
-      return false;
+    if (!isSafeToLoadUnconditionally(TValue, LI, Align, Size))
+      MaxTSize = std::max(MaxTSize, Size);
+    if (!isSafeToLoadUnconditionally(FValue, LI, Align, Size))
+      MaxFSize = std::max(MaxFSize, Size);
   }
+
+  if (MaxTSize && !isDereferenceablePointer(TValue, MaxTSize, DL))
+    return false;
+  if (MaxFSize && !isDereferenceablePointer(FValue, MaxFSize, DL))
+    return false;
 
   return true;
 }
@@ -1758,13 +1768,13 @@ static bool isVectorPromotionViableForSlice(Partition &P, const Slice &S,
     if (II->getIntrinsicID() != Intrinsic::lifetime_start &&
         II->getIntrinsicID() != Intrinsic::lifetime_end)
       return false;
-  } else if (cast<PointerType>(U->get()->getType())->getPointerElementType()->isStructTy()) {
-    // Disable vector promotion when there are loads or stores of an FCA.
-    return false;
   } else if (LoadInst *LI = dyn_cast<LoadInst>(U->getUser())) {
     if (LI->isVolatile())
       return false;
     Type *LTy = LI->getType();
+    // Disable vector promotion when there are loads or stores of an FCA.
+    if (LTy->isStructTy())
+      return false;
     if (P.beginOffset() > S.beginOffset() || P.endOffset() < S.endOffset()) {
       assert(LTy->isIntegerTy());
       LTy = SplitIntTy;
@@ -1775,6 +1785,9 @@ static bool isVectorPromotionViableForSlice(Partition &P, const Slice &S,
     if (SI->isVolatile())
       return false;
     Type *STy = SI->getValueOperand()->getType();
+    // Disable vector promotion when there are loads or stores of an FCA.
+    if (STy->isStructTy())
+      return false;
     if (P.beginOffset() > S.beginOffset() || P.endOffset() < S.endOffset()) {
       assert(STy->isIntegerTy());
       STy = SplitIntTy;

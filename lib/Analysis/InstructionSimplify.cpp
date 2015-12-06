@@ -3301,7 +3301,7 @@ static const Value *SimplifyWithOpReplaced(Value *V, Value *Op, Value *RepOp,
 
       if (LoadInst *LI = dyn_cast<LoadInst>(I))
         if (!LI->isVolatile())
-          return ConstantFoldLoadFromConstPtr(ConstOps[0], Q.DL);
+          return ConstantFoldLoadFromConstPtr(ConstOps[0], LI->getType(), Q.DL);
 
       return ConstantFoldInstOperands(I, I->getOpcode(), I->getType(), ConstOps,
                                       Q.DL, Q.TLI);

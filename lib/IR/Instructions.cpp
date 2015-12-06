@@ -1294,6 +1294,20 @@ void LoadInst::setAlignment(unsigned Align) {
   assert(getAlignment() == Align && "Alignment representation error!");
 }
 
+unsigned LoadInst::getActualAlignment() const {
+  unsigned Align = getAlignment();
+  if (Align == 0) {
+    const DataLayout &DL = getModule()->getDataLayout();
+    return DL.getABITypeAlignment(getType());
+  }
+  return Align;
+}
+
+uint64_t LoadInst::getLoadedSize() const {
+  const DataLayout &DL = getModule()->getDataLayout();
+  return DL.getTypeStoreSize(getType());
+}
+
 //===----------------------------------------------------------------------===//
 //                           StoreInst Implementation
 //===----------------------------------------------------------------------===//
