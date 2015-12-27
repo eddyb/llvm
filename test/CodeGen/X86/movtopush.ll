@@ -10,7 +10,7 @@ declare void @inreg(i32 %a, i32 inreg %b, i32 %c, i32 %d)
 declare x86_thiscallcc void @thiscall(%class.Class* %class, i32 %a, i32 %b, i32 %c, i32 %d)
 declare void @oneparam(i32 %a)
 declare void @eightparams(i32 %a, i32 %b, i32 %c, i32 %d, i32 %e, i32 %f, i32 %g, i32 %h)
-declare void @struct(%struct.s* byval %a, i32 %b, i32 %c, i32 %d)
+declare void @struct(%struct.s* byval align 4 %a, i32 %b, i32 %c, i32 %d)
 
 ; Here, we should have a reserved frame, so we don't expect pushes
 ; NORMAL-LABEL: test1:
@@ -266,7 +266,7 @@ entry:
   call void @good(i32 1, i32 2, i32 3, i32 4)
   %pv = ptrtoint i32* %p to i32
   %qv = ptrtoint i32* %q to i32
-  call void @struct(%struct.s* byval %s, i32 6, i32 %qv, i32 %pv)
+  call void @struct(%struct.s* byval align 4 %s, i32 6, i32 %qv, i32 %pv)
   ret void
 }
 
