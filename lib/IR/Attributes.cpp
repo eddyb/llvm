@@ -959,6 +959,37 @@ AttributeSet AttributeSet::addDereferenceableOrNullAttr(LLVMContext &C,
   return addAttributes(C, Index, AttributeSet::get(C, Index, B));
 }
 
+AttributeSet AttributeSet::fixupSizeAndAlignForIndirectAttr(unsigned Index,
+                                                            Type *Ty,
+                                                            const DataLayout &DL) const {
+  AttributeSet NewAttrs = *this;
+
+  // sizeof(T) and alignof(T) from the default DataLayout may be
+  // inadequate (smaller than if computed for actual target).
+  if (DL.isDefault()) return NewAttrs;
+
+  if (auto PtrTy = dyn_cast<PointerType>(Ty)) {
+    // Only add dereferenceable(sizeof(T)) and align(alignof(T))
+    // attributes if they are missing entirely.
+    // Leaves the job of checking pre-existing attributes
+    // against the actual size/align to the Verifier.
+    if (!hasAttribute(Index, Attribute::Dereferenceable)) {
+      uint64_t Size = DL.getTypeAllocSize(PtrTy->getPointerElementType());
+      NewAttrs = NewAttrs.addDereferenceableAttr(getContext(), Index, Size);
+    }
+
+    if (!hasAttribute(Index, Attribute::Alignment)) {
+      unsigned Align = DL.getABITypeAlignment(PtrTy->getPointerElementType());
+      AttrBuilder B;
+      B.addAlignmentAttr(Align);
+      auto AS = AttributeSet::get(getContext(), Index, B);
+      NewAttrs = NewAttrs.addAttributes(getContext(), Index, AS);
+    }
+  }
+
+  return NewAttrs;
+}
+
 //===----------------------------------------------------------------------===//
 // AttributeSet Accessor Methods
 //===----------------------------------------------------------------------===//

@@ -1605,7 +1605,7 @@ public:
 
   /// setAttributes - Set the parameter attributes for this call.
   ///
-  void setAttributes(const AttributeSet &Attrs) { AttributeList = Attrs; }
+  void setAttributes(const AttributeSet &Attrs);
 
   /// addAttribute - adds the attribute to the list of attributes.
   void addAttribute(unsigned i, Attribute::AttrKind attr);
@@ -3529,7 +3529,7 @@ public:
 
   /// setAttributes - Set the parameter attributes for this invoke.
   ///
-  void setAttributes(const AttributeSet &Attrs) { AttributeList = Attrs; }
+  void setAttributes(const AttributeSet &Attrs);
 
   /// addAttribute - adds the attribute to the list of attributes.
   void addAttribute(unsigned i, Attribute::AttrKind attr);

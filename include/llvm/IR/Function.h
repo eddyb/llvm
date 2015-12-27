@@ -81,6 +81,7 @@ private:
   }
 
   friend class SymbolTableListTraits<Function>;
+  friend class Module;
 
   void setParent(Module *parent);
 
@@ -165,7 +166,7 @@ public:
   AttributeSet getAttributes() const { return AttributeSets; }
 
   /// @brief Set the attribute list for this Function.
-  void setAttributes(AttributeSet attrs) { AttributeSets = attrs; }
+  void setAttributes(AttributeSet attrs);
 
   /// @brief Add function attributes to this function.
   void addFnAttr(Attribute::AttrKind N) {

@@ -26,9 +26,17 @@ Instruction::Instruction(Type *ty, unsigned it, Use *Ops, unsigned NumOps,
 
   // If requested, insert this instruction into a basic block...
   if (InsertBefore) {
+    // Use an unused bit of the SubclassData to mark partially
+    // constructed calls and invoke to sidestep setParent below.
+    if (it == Instruction::Call || it == Instruction::Invoke)
+      setInstructionSubclassData(1 << 14);
+
     BasicBlock *BB = InsertBefore->getParent();
     assert(BB && "Instruction to insert before is not in a basic block!");
     BB->getInstList().insert(InsertBefore->getIterator(), this);
+
+    if (it == Instruction::Call || it == Instruction::Invoke)
+      setInstructionSubclassData(0);
   }
 }
 
@@ -36,9 +44,17 @@ Instruction::Instruction(Type *ty, unsigned it, Use *Ops, unsigned NumOps,
                          BasicBlock *InsertAtEnd)
   : User(ty, Value::InstructionVal + it, Ops, NumOps), Parent(nullptr) {
 
+  // Use an unused bit of the SubclassData to mark partially
+  // constructed calls and invoke to sidestep setParent below.
+  if (it == Instruction::Call || it == Instruction::Invoke)
+    setInstructionSubclassData(1 << 14);
+
   // append this instruction into the basic block
   assert(InsertAtEnd && "Basic block to append to may not be NULL!");
   InsertAtEnd->getInstList().push_back(this);
+
+  if (it == Instruction::Call || it == Instruction::Invoke)
+    setInstructionSubclassData(0);
 }
 
 
@@ -51,7 +67,23 @@ Instruction::~Instruction() {
 
 
 void Instruction::setParent(BasicBlock *P) {
+  bool hadDL = getParent() && getFunction() && getModule() &&
+               !getModule()->getDataLayout().isDefault();
   Parent = P;
+  bool hasDL = getParent() && getFunction() && getModule() &&
+               !getModule()->getDataLayout().isDefault();
+
+  // The first time this basic block sees a module, and has access
+  // to a non-default DataLayout, trigger attribute fixups on
+  // call and invoke instructions, but not if the instruction
+  // has only been partially constructed.
+  bool partial = getSubclassDataFromInstruction() & (1 << 14);
+  if (!hadDL && hasDL && !partial) {
+    if (auto CI = dyn_cast<CallInst>(this))
+      CI->setAttributes(CI->getAttributes());
+    else if (auto CI = dyn_cast<InvokeInst>(this))
+      CI->setAttributes(CI->getAttributes());
+  }
 }
 
 const Module *Instruction::getModule() const {

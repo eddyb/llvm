@@ -368,9 +368,25 @@ void Module::addModuleFlag(MDNode *Node) {
 
 void Module::setDataLayout(StringRef Desc) {
   DL.reset(Desc);
+
+  // Re-trigger DataLayout-dependant attribute fixups on
+  // call and invoke instructions, and functions themselves.
+  for (Function &F : *this) {
+    F.setParent(nullptr);
+    F.setParent(this);
+  }
 }
 
-void Module::setDataLayout(const DataLayout &Other) { DL = Other; }
+void Module::setDataLayout(const DataLayout &Other) {
+  DL = Other;
+
+  // Re-trigger DataLayout-dependant attribute fixups on
+  // call and invoke instructions, and functions themselves.
+  for (Function &F : *this) {
+    F.setParent(nullptr);
+    F.setParent(this);
+  }
+}
 
 const DataLayout &Module::getDataLayout() const { return DL; }
 

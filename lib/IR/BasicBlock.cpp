@@ -19,6 +19,7 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include <algorithm>
 
@@ -87,7 +88,20 @@ BasicBlock::~BasicBlock() {
 
 void BasicBlock::setParent(Function *parent) {
   // Set Parent=parent, updating instruction symtab entries as appropriate.
+  bool hadDL = getParent() && getModule() &&
+               !getModule()->getDataLayout().isDefault();
   InstList.setSymTabObject(&Parent, parent);
+  bool hasDL = getParent() && getModule() &&
+               !getModule()->getDataLayout().isDefault();
+
+  // The first time this basic block sees a module, and has access
+  // to a non-default DataLayout, trigger attribute fixups on
+  // call and invoke instructions.
+  if (!hadDL && hasDL)
+    for (Instruction &I : *this) {
+      I.setParent(nullptr);
+      I.setParent(this);
+    }
 }
 
 void BasicBlock::removeFromParent() {

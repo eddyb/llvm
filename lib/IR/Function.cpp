@@ -304,7 +304,21 @@ bool Function::arg_empty() const {
 }
 
 void Function::setParent(Module *parent) {
+  bool hadDL = Parent && !Parent->getDataLayout().isDefault();
   Parent = parent;
+  bool hasDL = Parent && !Parent->getDataLayout().isDefault();
+
+  // The first time this basic block sees a module, and has access
+  // to a non-default DataLayout, trigger attribute fixups on
+  // call and invoke instructions, and on the function itself.
+  if (!hadDL && hasDL) {
+    setAttributes(getAttributes());
+    for (Instruction &I : instructions(this)) {
+      BasicBlock *P = I.getParent();
+      I.setParent(nullptr);
+      I.setParent(P);
+    }
+  }
 }
 
 // dropAllReferences() - This function causes all the subinstructions to "let
@@ -335,6 +349,11 @@ void Function::dropAllReferences() {
 
   // Metadata is stored in a side-table.
   clearMetadata();
+}
+
+void Function::setAttributes(AttributeSet attrs) {
+  const DataLayout *DL = Parent ? &Parent->getDataLayout() : nullptr;
+  AttributeSets = attrs.fixupSizeAndAlignForIndirectAttrs(Ty->params(), DL);
 }
 
 void Function::addAttribute(unsigned i, Attribute::AttrKind attr) {

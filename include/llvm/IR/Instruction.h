@@ -511,6 +511,8 @@ private:
   }
 
   friend class SymbolTableListTraits<Instruction>;
+  friend class BasicBlock;
+  friend class Function;
   void setParent(BasicBlock *P);
 protected:
   // Instruction subclasses can stick up to 15 bits of stuff into the

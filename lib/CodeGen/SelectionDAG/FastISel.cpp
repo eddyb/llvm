@@ -948,11 +948,10 @@ bool FastISel::lowerCallTo(CallLoweringInfo &CLI) {
   // Handle all of the outgoing arguments.
   CLI.clearOuts();
   for (auto &Arg : CLI.getArgs()) {
-    Type *FinalType = Arg.Ty;
-    if (Arg.IsByVal)
-      FinalType = cast<PointerType>(Arg.Ty)->getPointerElementType();
-    bool NeedsRegBlock = TLI.functionArgumentNeedsConsecutiveRegisters(
-        FinalType, CLI.CallConv, CLI.IsVarArg);
+    bool NeedsRegBlock = false;
+    if (!Arg.IsByVal)
+      NeedsRegBlock = TLI.functionArgumentNeedsConsecutiveRegisters(
+          Arg.Ty, CLI.CallConv, CLI.IsVarArg);
 
     ISD::ArgFlagsTy Flags;
     if (Arg.IsZExt)

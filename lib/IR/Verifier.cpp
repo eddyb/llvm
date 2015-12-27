@@ -1406,6 +1406,41 @@ void Verifier::VerifyParameterAttrs(AttributeSet Attrs, unsigned Idx, Type *Ty,
                  !Attrs.hasAttribute(Idx, Attribute::InAlloca),
              "Attributes 'byval' and 'inalloca' do not support unsized types!",
              V);
+    } else {
+      // Get the enclosing function for the DataLayout.
+      const Function *F = dyn_cast<Function>(V);
+      if (!F)
+        F = cast<Instruction>(V)->getFunction();
+      const DataLayout &DL = F->getParent()->getDataLayout();
+
+      // Check byval/inalloca size and alignment, but only if the DataLayout
+      // is not the default one (otherwise no fixups got generated).
+      bool hasByVal = Attrs.hasAttribute(Idx, Attribute::ByVal);
+      bool hasInAlloca = Attrs.hasAttribute(Idx, Attribute::InAlloca);
+      if (!DL.isDefault() && (hasByVal || hasInAlloca)) {
+        uint64_t Size = DL.getTypeAllocSize(PTy->getPointerElementType());
+        unsigned Align = DL.getABITypeAlignment(PTy->getPointerElementType());
+
+        // Alignment attributes on byval arguments already have defined
+        // semantics, so we can only enforce that alignment is present,
+        // but not actually check its value, as both larger and smaller
+        // alignments are valid.
+        // On the other hand, dereferenceable should describe the exact
+        // number of bytes that should get copied, otherwise calls may
+        // get miscompiled. Care should be taken to avoid inferring
+        // larger values for dereferenceable from call arguments.
+        bool hasAlign = Attrs.hasAttribute(Idx, Attribute::Alignment);
+        if (Attrs.getDereferenceableBytes(Idx) != Size || !hasAlign) {
+          OS << "Attribute '" << (hasInAlloca ? "inalloca" : "byval");
+          OS << "' expects '";
+          OS << Attribute::getWithDereferenceableBytes(*Context, Size).getAsString();
+          if (!hasAlign)
+            OS << ' ' << Attribute::getWithAlignment(*Context, Align).getAsString();
+          OS << "' for type " << *PTy << ", found '";
+          OS << Attrs.getAsString(Idx) << "'";
+          CheckFailed("", V);
+        }
+      }
     }
   } else {
     Assert(!Attrs.hasAttribute(Idx, Attribute::ByVal),

@@ -32,8 +32,10 @@ class AttributeImpl;
 class AttributeSetImpl;
 class AttributeSetNode;
 class Constant;
+class DataLayout;
 template<typename T> struct DenseMapInfo;
 class Function;
+class FunctionType;
 class LLVMContext;
 class Type;
 
@@ -266,6 +268,33 @@ public:
   /// set.
   AttributeSet addDereferenceableOrNullAttr(LLVMContext &C, unsigned Index,
                                             uint64_t Bytes) const;
+
+  /// \brief Add dereferenceable(sizeof(T)) and align(alignof(T))
+  /// attributes to each T* byval or inalloca argument.
+  /// Because attribute sets are immutable, this returns a new set.
+  template <typename ArgTypesIter>
+  AttributeSet fixupSizeAndAlignForIndirectAttrs(ArgTypesIter ArgTypes,
+                                                 const DataLayout *DL) const {
+    AttributeSet NewAttrs = *this;
+    // We require a DataLayout to perform any fixups.
+    if (!DL)
+      return NewAttrs;
+
+    unsigned AttrIdx = 1;
+    for (Type *ArgTy : ArgTypes) {
+      if (hasAttribute(AttrIdx, Attribute::ByVal) ||
+          hasAttribute(AttrIdx, Attribute::InAlloca))
+        NewAttrs = NewAttrs.fixupSizeAndAlignForIndirectAttr(AttrIdx, ArgTy, *DL);
+      ++AttrIdx;
+    }
+    return NewAttrs;
+  }
+
+  /// \brief Add dereferenceable(sizeof(T)) and align(alignof(T)) attributes
+  /// to the T* byval or inalloca argument at the given index.
+  /// Because attribute sets are immutable, this returns a new set.
+  AttributeSet fixupSizeAndAlignForIndirectAttr(unsigned Index, Type *Ty,
+                                                const DataLayout &DL) const;
 
   //===--------------------------------------------------------------------===//
   // AttributeSet Accessors

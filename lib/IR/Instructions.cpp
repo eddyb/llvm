@@ -313,6 +313,19 @@ CallInst *CallInst::Create(CallInst *CI, ArrayRef<OperandBundleDef> OpB,
   return NewCI;
 }
 
+void CallInst::setAttributes(const AttributeSet &Attrs) {
+  // We must be in a BasicBlock in a Function in a Module.
+  bool hasDL = getParent() && getFunction() && getModule();
+  const DataLayout *DL = hasDL ? &getModule()->getDataLayout() : nullptr;
+  auto FArgTy = std::function<Type*(Use&)>([](Use &U) {
+    return U->getType();
+  });
+  AttributeList = Attrs.fixupSizeAndAlignForIndirectAttrs(
+      make_range(map_iterator(arg_begin(), FArgTy),
+                 map_iterator(arg_end(), FArgTy)),
+      DL);
+}
+
 void CallInst::addAttribute(unsigned i, Attribute::AttrKind attr) {
   AttributeSet PAL = getAttributes();
   PAL = PAL.addAttribute(getContext(), i, attr);
@@ -637,6 +650,19 @@ bool InvokeInst::dataOperandHasImpliedAttr(unsigned i,
   assert(hasOperandBundles() && i >= (getBundleOperandsStartIndex() + 1) &&
          "Must be either an invoke argument or an operand bundle!");
   return bundleOperandHasAttr(i - 1, A);
+}
+
+void InvokeInst::setAttributes(const AttributeSet &Attrs) {
+  // We must be in a BasicBlock in a Function in a Module.
+  bool hasDL = getParent() && getFunction() && getModule();
+  const DataLayout *DL = hasDL ? &getModule()->getDataLayout() : nullptr;
+  auto FArgTy = std::function<Type*(Use&)>([](Use &U) {
+    return U->getType();
+  });
+  AttributeList = Attrs.fixupSizeAndAlignForIndirectAttrs(
+      make_range(map_iterator(arg_begin(), FArgTy),
+                 map_iterator(arg_end(), FArgTy)),
+      DL);
 }
 
 void InvokeInst::addAttribute(unsigned i, Attribute::AttrKind attr) {
