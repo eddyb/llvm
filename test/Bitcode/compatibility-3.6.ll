@@ -404,9 +404,9 @@ declare void @f.param.signext(i8 signext)
 declare void @f.param.inreg(i8 inreg)
 ; CHECK: declare void @f.param.inreg(i8 inreg)
 declare void @f.param.byval({ i8, i8 }* byval)
-; CHECK: declare void @f.param.byval({ i8, i8 }* byval)
+; CHECK: declare void @f.param.byval({ i8, i8 }* byval align 1 dereferenceable(2))
 declare void @f.param.inalloca(i8* inalloca)
-; CHECK: declare void @f.param.inalloca(i8* inalloca)
+; CHECK: declare void @f.param.inalloca(i8* inalloca align 1 dereferenceable(1))
 declare void @f.param.sret(i8* sret)
 ; CHECK: declare void @f.param.sret(i8* sret)
 declare void @f.param.noalias(i8* noalias)
@@ -993,7 +993,7 @@ exit:
 
 define void @instructions.call_musttail(i8* inalloca %val) {
   musttail call void @f.param.inalloca(i8* inalloca %val)
-  ; CHECK: musttail call void @f.param.inalloca(i8* inalloca %val)
+  ; CHECK: musttail call void @f.param.inalloca(i8* inalloca align 1 dereferenceable(1) %val)
 
   ret void
 }

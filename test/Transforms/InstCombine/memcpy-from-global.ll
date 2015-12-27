@@ -122,7 +122,7 @@ define void @test4() {
   call void @llvm.memcpy.p0i8.p0i8.i64(i8* %a, i8* bitcast (%T* @G to i8*), i64 124, i32 4, i1 false)
   call void @baz(i8* byval %a)
 ; CHECK-LABEL: @test4(
-; CHECK-NEXT: call void @baz(i8* byval getelementptr inbounds (%T, %T* @G, i64 0, i32 0))
+; CHECK-NEXT: call void @baz(i8* byval align 1 dereferenceable(1) getelementptr inbounds (%T, %T* @G, i64 0, i32 0))
   ret void
 }
 
@@ -134,7 +134,7 @@ define void @test5() {
   call void @llvm.memcpy.p0i8.p0i8.i64(i8* %a, i8* bitcast (%T* @G to i8*), i64 124, i32 4, i1 false)
   call void @baz(i8* byval %a)
 ; CHECK-LABEL: @test5(
-; CHECK-NEXT: call void @baz(i8* byval getelementptr inbounds (%T, %T* @G, i64 0, i32 0))
+; CHECK-NEXT: call void @baz(i8* byval align 1 dereferenceable(1) getelementptr inbounds (%T, %T* @G, i64 0, i32 0))
   ret void
 }
 

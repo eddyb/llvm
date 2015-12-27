@@ -20,7 +20,7 @@ entry:
   ret void
 }
 
-; CHECK: internal i8 @UseLongDoubleUnsafely(%union.u* byval align 16 %arg) {
+; CHECK: internal i8 @UseLongDoubleUnsafely(%union.u* byval align 16 dereferenceable(16) %arg) {
 define internal i8 @UseLongDoubleUnsafely(%union.u* byval align 16 %arg) {
 entry:
   %bitcast = bitcast %union.u* %arg to %struct.s*
@@ -36,14 +36,14 @@ define internal x86_fp80 @UseLongDoubleSafely(%union.u* byval align 16 %arg) {
   ret x86_fp80 %fp80
 }
 
-; CHECK: define internal i64 @AccessPaddingOfStruct(%struct.Foo* byval %a) {
+; CHECK: define internal i64 @AccessPaddingOfStruct(%struct.Foo* byval align 8 dereferenceable(16) %a) {
 define internal i64 @AccessPaddingOfStruct(%struct.Foo* byval %a) {
   %p = bitcast %struct.Foo* %a to i64*
   %v = load i64, i64* %p
   ret i64 %v
 }
 
-; CHECK: define internal i64 @CaptureAStruct(%struct.Foo* byval %a) {
+; CHECK: define internal i64 @CaptureAStruct(%struct.Foo* byval align 8 dereferenceable(16) %a) {
 define internal i64 @CaptureAStruct(%struct.Foo* byval %a) {
 entry:
   %a_ptr = alloca %struct.Foo*

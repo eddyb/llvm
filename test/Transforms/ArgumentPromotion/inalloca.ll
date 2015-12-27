@@ -34,7 +34,7 @@ entry:
 
 ; Argpromote can't promote %a because of the icmp use.
 define internal i1 @g(%struct.ss* %a, %struct.ss* inalloca %b) nounwind  {
-; CHECK: define internal i1 @g(%struct.ss* %a, %struct.ss* inalloca %b)
+; CHECK: define internal i1 @g(%struct.ss* %a, %struct.ss* inalloca align 4 dereferenceable(8) %b)
 entry:
   %c = icmp eq %struct.ss* %a, %b
   ret i1 %c
@@ -44,6 +44,6 @@ define i32 @test() {
 entry:
   %S = alloca inalloca %struct.ss
   %c = call i1 @g(%struct.ss* %S, %struct.ss* inalloca %S)
-; CHECK: call i1 @g(%struct.ss* %S, %struct.ss* inalloca %S)
+; CHECK: call i1 @g(%struct.ss* %S, %struct.ss* inalloca align 4 dereferenceable(8) %S)
   ret i32 0
 }
