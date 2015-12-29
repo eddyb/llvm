@@ -29,7 +29,7 @@ define i32 @no1(i32* %p, i32* dereferenceable(4) %q) {
 
 ; CHECK-LABEL: yes0:
 ; CHECK: return $pop0{{$}}
-define i32 @yes0(i32* %p, i32* dereferenceable(4) %q) {
+define i32 @yes0(i32* %p, i32* dereferenceable(4) align 4 %q) {
   %t = load i32, i32* %q, !invariant.load !0
   store i32 0, i32* %p
   ret i32 %t

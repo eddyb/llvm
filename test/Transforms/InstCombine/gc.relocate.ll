@@ -9,7 +9,7 @@ declare zeroext i1 @return_i1()
 declare token @llvm.experimental.gc.statepoint.p0f_i1f(i64, i32, i1 ()*, i32, i32, ...)
 declare i32 addrspace(1)* @llvm.experimental.gc.relocate.p1i32(token, i32, i32)
 
-define i32 addrspace(1)* @deref(i32 addrspace(1)* dereferenceable(8) %dparam) gc "statepoint-example" {
+define i32 addrspace(1)* @deref(i32 addrspace(1)* dereferenceable(8) align 4 %dparam) gc "statepoint-example" {
 ; Checks that a dereferenceabler pointer
 ; CHECK-LABEL: @deref
 ; CHECK: call dereferenceable(8)

@@ -15,7 +15,8 @@ target triple = "x86_64-unknown-linux-gnu"
 ; CHECK: load i32, i32* %c, align 4
 ; CHECK: for.body:
 
-define void @test1(i32* noalias nocapture %a, i32* noalias nocapture readonly %b, i32* nocapture readonly nonnull dereferenceable(4) %c, i32 %n) #0 {
+define void @test1(i32* noalias nocapture %a, i32* noalias nocapture readonly %b,
+                   i32* nocapture readonly nonnull dereferenceable(4) align 4 %c, i32 %n) #0 {
 entry:
   %cmp11 = icmp sgt i32 %n, 0
   br i1 %cmp11, label %for.body, label %for.end
@@ -95,7 +96,8 @@ for.end:                                          ; preds = %for.inc, %entry
 ; CHECK: load i32, i32* %c2, align 4
 ; CHECK: for.body:
 
-define void @test3(i32* noalias nocapture %a, i32* noalias nocapture readonly %b, i32* nocapture readonly dereferenceable(12) %c, i32 %n) #0 {
+define void @test3(i32* noalias nocapture %a, i32* noalias nocapture readonly %b,
+                   i32* nocapture readonly dereferenceable(12) align 4 %c, i32 %n) #0 {
 entry:
   %cmp11 = icmp sgt i32 %n, 0
   br i1 %cmp11, label %for.body, label %for.end
@@ -133,7 +135,8 @@ for.end:                                          ; preds = %for.inc, %entry
 ; CHECK: if.then:
 ; CHECK: load i32, i32* %c2, align 4
 
-define void @test4(i32* noalias nocapture %a, i32* noalias nocapture readonly %b, i32* nocapture readonly dereferenceable(11) %c, i32 %n) #0 {
+define void @test4(i32* noalias nocapture %a, i32* noalias nocapture readonly %b,
+                   i32* nocapture readonly dereferenceable(11) align 4 %c, i32 %n) #0 {
 entry:
   %cmp11 = icmp sgt i32 %n, 0
   br i1 %cmp11, label %for.body, label %for.end
@@ -179,7 +182,7 @@ for.end:                                          ; preds = %for.inc, %entry
 ; CHECK: load i32, i32* %c, align 4
 ; CHECK: for.body:
 
-define void @test5(i32* noalias %a, i32* %b, i32* dereferenceable_or_null(4) %c, i32 %n) #0 {
+define void @test5(i32* noalias %a, i32* %b, i32* dereferenceable_or_null(4) align 4 %c, i32 %n) #0 {
 entry:
   %not_null = icmp ne i32* %c, null
   br i1 %not_null, label %not.null, label %for.end
@@ -223,7 +226,7 @@ for.end:                                          ; preds = %for.inc, %entry, %n
 ; CHECK: if.then:
 ; CHECK: load i32, i32* %c, align 4
 
-define i1 @test6(i32* noalias %a, i32* %b, i32* dereferenceable_or_null(4) %c, i32 %n) #0 {
+define i1 @test6(i32* noalias %a, i32* %b, i32* dereferenceable_or_null(4) align 4 %c, i32 %n) #0 {
 entry:
   %not_null = icmp ne i32* %c, null
   %cmp11 = icmp sgt i32 %n, 0
@@ -270,7 +273,7 @@ for.end:                                          ; preds = %for.inc, %entry
 
 define void @test7(i32* noalias %a, i32* %b, i32** %cptr, i32 %n) #0 {
 entry:
-  %c = load i32*, i32** %cptr, !dereferenceable !0
+  %c = load i32*, i32** %cptr, !dereferenceable !0, !align !0
   %cmp11 = icmp sgt i32 %n, 0
   br i1 %cmp11, label %for.body, label %for.end
 
@@ -317,7 +320,7 @@ for.end:                                          ; preds = %for.inc, %entry
 
 define void @test8(i32* noalias %a, i32* %b, i32** %cptr, i32 %n) #0 {
 entry:
-  %c = load i32*, i32** %cptr, !dereferenceable_or_null !0
+  %c = load i32*, i32** %cptr, !dereferenceable_or_null !0, !align !0
   %not_null = icmp ne i32* %c, null
   br i1 %not_null, label %not.null, label %for.end
 
@@ -401,7 +404,7 @@ for.end:                                          ; preds = %for.inc, %entry
 ; CHECK: if.then:
 ; CHECK: load i32, i32* %c, align 4
 
-define void @test10(i32* noalias %a, i32* %b, i32** dereferenceable(8) %cptr, i32 %n) #0 {
+define void @test10(i32* noalias %a, i32* %b, i32** dereferenceable(8) align 8 %cptr, i32 %n) #0 {
 entry:
   %cmp11 = icmp sgt i32 %n, 0
   br i1 %cmp11, label %for.body, label %for.end

@@ -20,7 +20,7 @@ declare i32* @foo()
 @globalptr.align16 = external global i8, align 16
 
 ; CHECK-LABEL: 'test'
-define void @test(i32 addrspace(1)* dereferenceable(8) %dparam,
+define void @test(i32 addrspace(1)* dereferenceable(8) align 4 %dparam,
                   i8 addrspace(1)* dereferenceable(32) align 1 %dparam.align1,
                   i8 addrspace(1)* dereferenceable(32) align 16 %dparam.align16)
     gc "statepoint-example" {
@@ -53,7 +53,7 @@ entry:
 
     ; Load from a dereferenceable load
 ; CHECK: %d4_load{{.*}}(aligned)
-    %d4_load = load i32*, i32** @globali32ptr, !dereferenceable !0
+    %d4_load = load i32*, i32** @globali32ptr, !dereferenceable !0, !align !0
     %load7 = load i32, i32* %d4_load
 
     ; Load from an offset not covered by the dereferenceable portion
@@ -68,7 +68,7 @@ entry:
 
     ; Load from a non-null pointer with dereferenceable_or_null
 ; CHECK: %d_or_null_non_null_load{{.*}}(aligned)
-    %d_or_null_non_null_load = load i32*, i32** @globali32ptr, !nonnull !2, !dereferenceable_or_null !0
+    %d_or_null_non_null_load = load i32*, i32** @globali32ptr, !nonnull !2, !dereferenceable_or_null !0, !align !0
     %load10 = load i32, i32* %d_or_null_non_null_load
 
     ; It's OK to overrun static array size as long as we stay within underlying object size
@@ -119,7 +119,7 @@ entry:
 ; CHECK: %deref_return{{.*}}(unaligned)
 ; CHECK: %deref_and_aligned_return{{.*}}(aligned)
     %no_deref_return = call i32* @foo()
-    %deref_return = call dereferenceable(32) i32* @foo()
+    %deref_return = call dereferenceable(32) align 4 i32* @foo()
     %deref_and_aligned_return = call dereferenceable(32) align 16 i32* @foo()
     %load23 = load i32, i32* %no_deref_return
     %load24 = load i32, i32* %deref_return, align 16
@@ -128,7 +128,7 @@ entry:
     ; Load from a dereferenceable and aligned load
 ; CHECK: %d4_unaligned_load{{.*}}(unaligned)
 ; CHECK: %d4_aligned_load{{.*}}(aligned)
-    %d4_unaligned_load = load i32*, i32** @globali32ptr, !dereferenceable !0
+    %d4_unaligned_load = load i32*, i32** @globali32ptr, !dereferenceable !0, !align !0
     %d4_aligned_load = load i32*, i32** @globali32ptr, !dereferenceable !0, !align !{i64 16}
     %load26 = load i32, i32* %d4_unaligned_load, align 16
     %load27 = load i32, i32* %d4_aligned_load, align 16

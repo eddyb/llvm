@@ -71,7 +71,7 @@ end:
 }
 
 define i32* @test5(i32 %a, i32 %b, i32 %c, i32* dereferenceable(10) %ptr1,
-                  i32* dereferenceable(10) %ptr2, i32** dereferenceable(10) %ptr3) nounwind {
+                  i32* dereferenceable(10) %ptr2, i32** dereferenceable(10) align 8 %ptr3) nounwind {
 ; CHECK-LABEL: @test5(
 entry:
         %tmp1 = icmp eq i32 %b, 0

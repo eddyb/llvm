@@ -1573,17 +1573,13 @@ static unsigned getAlignment(const Value *V, const DataLayout &DL) {
       }
     }
   } else if (const Argument *A = dyn_cast<Argument>(V)) {
-    Align = A->getType()->isPointerTy() ? A->getParamAlignment() : 0;
-
-    if (!Align && A->hasStructRetAttr()) {
-      // An sret parameter has at least the ABI alignment of the return type.
-      Type *EltTy = cast<PointerType>(A->getType())->getPointerElementType();
-      if (EltTy->isSized())
-        Align = DL.getABITypeAlignment(EltTy);
-    }
-  } else if (const AllocaInst *AI = dyn_cast<AllocaInst>(V))
+    if (A->getType()->isPointerTy())
+      Align = A->getParamAlignment();
+  } else if (const AllocaInst *AI = dyn_cast<AllocaInst>(V)) {
     Align = AI->getAlignment();
-  else if (auto CS = ImmutableCallSite(V))
+    if (Align == 0)
+      Align = DL.getABITypeAlignment(AI->getAllocatedType());
+  } else if (auto CS = ImmutableCallSite(V))
     Align = CS.getAttributes().getParamAlignment(AttributeSet::ReturnIndex);
   else if (const LoadInst *LI = dyn_cast<LoadInst>(V))
     if (MDNode *MD = LI->getMetadata(LLVMContext::MD_align)) {
@@ -3173,12 +3169,8 @@ static bool isAligned(const Value *Base, APInt Offset, unsigned Align,
                       const DataLayout &DL) {
   APInt BaseAlign(Offset.getBitWidth(), getAlignment(Base, DL));
 
-  if (!BaseAlign) {
-    Type *Ty = cast<PointerType>(Base->getType())->getPointerElementType();
-    if (!Ty->isSized())
-      return false;
-    BaseAlign = DL.getABITypeAlignment(Ty);
-  }
+  if (!BaseAlign)
+    return false;
 
   APInt Alignment(Offset.getBitWidth(), Align);
 
