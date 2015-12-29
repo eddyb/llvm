@@ -417,9 +417,7 @@ void SafeStack::findInsts(Function &F,
   for (Argument &Arg : F.args()) {
     if (!Arg.hasByValAttr())
       continue;
-    uint64_t Size =
-        DL->getTypeStoreSize(cast<PointerType>(Arg.getType())->getPointerElementType());
-    if (IsSafeStackAlloca(&Arg, Size))
+    if (IsSafeStackAlloca(&Arg, Arg.getDereferenceableBytes()))
       continue;
 
     ++NumUnsafeByValArguments;
@@ -493,9 +491,7 @@ Value *SafeStack::moveStaticAllocasToUnsafeStack(
   // Compute maximum alignment among static objects on the unsafe stack.
   unsigned MaxAlignment = 0;
   for (Argument *Arg : ByValArguments) {
-    Type *Ty = cast<PointerType>(Arg->getType())->getPointerElementType();
-    unsigned Align = std::max((unsigned)DL->getPrefTypeAlignment(Ty),
-                              Arg->getParamAlignment());
+    unsigned Align = Arg->getParamAlignment();
     if (Align > MaxAlignment)
       MaxAlignment = Align;
   }
@@ -521,15 +517,12 @@ Value *SafeStack::moveStaticAllocasToUnsafeStack(
   IRB.SetInsertPoint(BasePointer->getNextNode());
 
   for (Argument *Arg : ByValArguments) {
-    Type *Ty = cast<PointerType>(Arg->getType())->getPointerElementType();
-
-    uint64_t Size = DL->getTypeStoreSize(Ty);
+    uint64_t Size = Arg->getDereferenceableBytes();
     if (Size == 0)
       Size = 1; // Don't create zero-sized stack objects.
 
     // Ensure the object is properly aligned.
-    unsigned Align = std::max((unsigned)DL->getPrefTypeAlignment(Ty),
-                              Arg->getParamAlignment());
+    unsigned Align = Arg->getParamAlignment();
 
     // Add alignment.
     // NOTE: we ensure that BasePointer itself is aligned to >= Align.

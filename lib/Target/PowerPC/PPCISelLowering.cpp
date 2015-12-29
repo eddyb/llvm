@@ -940,50 +940,6 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
   }
 }
 
-/// getMaxByValAlign - Helper for getByValTypeAlignment to determine
-/// the desired ByVal argument alignment.
-static void getMaxByValAlign(Type *Ty, unsigned &MaxAlign,
-                             unsigned MaxMaxAlign) {
-  if (MaxAlign == MaxMaxAlign)
-    return;
-  if (VectorType *VTy = dyn_cast<VectorType>(Ty)) {
-    if (MaxMaxAlign >= 32 && VTy->getBitWidth() >= 256)
-      MaxAlign = 32;
-    else if (VTy->getBitWidth() >= 128 && MaxAlign < 16)
-      MaxAlign = 16;
-  } else if (ArrayType *ATy = dyn_cast<ArrayType>(Ty)) {
-    unsigned EltAlign = 0;
-    getMaxByValAlign(ATy->getElementType(), EltAlign, MaxMaxAlign);
-    if (EltAlign > MaxAlign)
-      MaxAlign = EltAlign;
-  } else if (StructType *STy = dyn_cast<StructType>(Ty)) {
-    for (auto *EltTy : STy->elements()) {
-      unsigned EltAlign = 0;
-      getMaxByValAlign(EltTy, EltAlign, MaxMaxAlign);
-      if (EltAlign > MaxAlign)
-        MaxAlign = EltAlign;
-      if (MaxAlign == MaxMaxAlign)
-        break;
-    }
-  }
-}
-
-/// getByValTypeAlignment - Return the desired alignment for ByVal aggregate
-/// function arguments in the caller parameter area.
-unsigned PPCTargetLowering::getByValTypeAlignment(Type *Ty,
-                                                  const DataLayout &DL) const {
-  // Darwin passes everything on 4 byte boundary.
-  if (Subtarget.isDarwin())
-    return 4;
-
-  // 16byte and wider vectors are passed on 16byte boundary.
-  // The rest is 8 on PPC64 and 4 on PPC32 boundary.
-  unsigned Align = Subtarget.isPPC64() ? 8 : 4;
-  if (Subtarget.hasAltivec() || Subtarget.hasQPX())
-    getMaxByValAlign(Ty, Align, Subtarget.hasQPX() ? 32 : 16);
-  return Align;
-}
-
 bool PPCTargetLowering::useSoftFloat() const {
   return Subtarget.useSoftFloat();
 }

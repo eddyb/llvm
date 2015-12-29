@@ -1654,21 +1654,15 @@ public:
   bool dataOperandHasImpliedAttr(unsigned i, Attribute::AttrKind A) const;
 
   /// \brief Extract the alignment for a call or parameter (0=unknown).
-  unsigned getParamAlignment(unsigned i) const {
-    return AttributeList.getParamAlignment(i);
-  }
+  unsigned getParamAlignment(unsigned i) const;
 
   /// \brief Extract the number of dereferenceable bytes for a call or
   /// parameter (0=unknown).
-  uint64_t getDereferenceableBytes(unsigned i) const {
-    return AttributeList.getDereferenceableBytes(i);
-  }
+  uint64_t getDereferenceableBytes(unsigned i) const;
 
   /// \brief Extract the number of dereferenceable_or_null bytes for a call or
   /// parameter (0=unknown).
-  uint64_t getDereferenceableOrNullBytes(unsigned i) const {
-    return AttributeList.getDereferenceableOrNullBytes(i);
-  }
+  uint64_t getDereferenceableOrNullBytes(unsigned i) const;
 
   /// @brief Determine if the parameter or return value is marked with NoAlias
   /// attribute.
@@ -3576,21 +3570,15 @@ public:
   bool dataOperandHasImpliedAttr(unsigned i, Attribute::AttrKind A) const;
 
   /// \brief Extract the alignment for a call or parameter (0=unknown).
-  unsigned getParamAlignment(unsigned i) const {
-    return AttributeList.getParamAlignment(i);
-  }
+  unsigned getParamAlignment(unsigned i) const;
 
   /// \brief Extract the number of dereferenceable bytes for a call or
   /// parameter (0=unknown).
-  uint64_t getDereferenceableBytes(unsigned i) const {
-    return AttributeList.getDereferenceableBytes(i);
-  }
+  uint64_t getDereferenceableBytes(unsigned i) const;
 
   /// \brief Extract the number of dereferenceable_or_null bytes for a call or
   /// parameter (0=unknown).
-  uint64_t getDereferenceableOrNullBytes(unsigned i) const {
-    return AttributeList.getDereferenceableOrNullBytes(i);
-  }
+  uint64_t getDereferenceableOrNullBytes(unsigned i) const;
 
   /// @brief Determine if the parameter or return value is marked with NoAlias
   /// attribute.

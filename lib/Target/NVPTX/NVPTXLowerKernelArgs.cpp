@@ -128,38 +128,49 @@ INITIALIZE_PASS(NVPTXLowerKernelArgs, "nvptx-lower-kernel-args",
                 "Lower kernel arguments (NVPTX)", false, false)
 
 // =============================================================================
-// If the function had a byval struct ptr arg, say foo(%struct.x *byval %d),
+// If the function had a byval struct ptr arg, for example:
+//   foo(%struct.x *byval dereferenceable(S) align A %d)
 // then add the following instructions to the first basic block:
 //
-// %temp = alloca %struct.x, align 8
+// %temp = alloca [i8 x S], align A
+// %cast_temp = bitcast [i8 x S]* %temp to %struct.x*
 // %tempd = addrspacecast %struct.x* %d to %struct.x addrspace(101)*
-// %tv = load %struct.x addrspace(101)* %tempd
-// store %struct.x %tv, %struct.x* %temp, align 8
+// %dst = bitcast [i8 x S]* %temp to i8*
+// %src = bitcast %struct.x addrspace(101)* %tempd to i8 addrspace(101)*
+// call void @llvm.memcpy.p0i8.p101i8.i64(i8* %dst, i8 addrspace(101)* %src, i64 S, i32 A, i1 false)
 //
 // The above code allocates some space in the stack and copies the incoming
 // struct from param space to local space.
-// Then replace all occurrences of %d by %temp.
+// Then replace all occurrences of %d by %cast_temp.
 // =============================================================================
 void NVPTXLowerKernelArgs::handleByValParam(Argument *Arg) {
   Function *Func = Arg->getParent();
   Instruction *FirstInst = &(Func->getEntryBlock().front());
+
+  unsigned ArgIdx = Arg->getArgNo();
+  unsigned Align = Func->getParamAlignment(ArgIdx + 1);
+  uint64_t Size = Func->getDereferenceableBytes(ArgIdx + 1);
+
   PointerType *PType = dyn_cast<PointerType>(Arg->getType());
 
   assert(PType && "Expecting pointer type in handleByValParam");
 
-  Type *StructType = PType->getPointerElementType();
-  AllocaInst *AllocA = new AllocaInst(StructType, Arg->getName(), FirstInst);
+  Type *CopyType = ArrayType::get(Type::getInt8Ty(Func->getContext()), Size);
+  AllocaInst *AllocA = new AllocaInst(CopyType, Arg->getName(), FirstInst);
   // Set the alignment to alignment of the byval parameter. This is because,
   // later load/stores assume that alignment, and we are going to replace
   // the use of the byval parameter with this alloca instruction.
-  AllocA->setAlignment(Func->getParamAlignment(Arg->getArgNo() + 1));
-  Arg->replaceAllUsesWith(AllocA);
+  AllocA->setAlignment(Align);
+  Value *CastAllocA = new BitCastInst(AllocA, PType, Arg->getName(), FirstInst);
+  Arg->replaceAllUsesWith(CastAllocA);
 
   Value *ArgInParam = new AddrSpaceCastInst(
-      Arg, PointerType::get(StructType, ADDRESS_SPACE_PARAM), Arg->getName(),
-      FirstInst);
-  LoadInst *LI = new LoadInst(ArgInParam, Arg->getName(), FirstInst);
-  new StoreInst(LI, AllocA, FirstInst);
+      Arg, PointerType::get(PType->getPointerElementType(),
+                            ADDRESS_SPACE_PARAM),
+      Arg->getName(), FirstInst);
+
+  IRBuilder<> Builder(FirstInst);
+  Builder.CreateMemCpy(AllocA, ArgInParam, Size, Align);
 }
 
 void NVPTXLowerKernelArgs::markPointerAsGlobal(Value *Ptr) {

@@ -78,6 +78,7 @@ void TargetLowering::ArgListEntry::setAttributes(ImmutableCallSite *CS,
   isInAlloca = CS->paramHasAttr(AttrIdx, Attribute::InAlloca);
   isReturned = CS->paramHasAttr(AttrIdx, Attribute::Returned);
   Alignment  = CS->getParamAlignment(AttrIdx);
+  IndirectSize = CS->getDereferenceableBytes(AttrIdx);
 }
 
 /// Generate a libcall taking the given operands as arguments and returning a

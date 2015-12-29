@@ -41,11 +41,13 @@ public:
     bool IsInAlloca : 1;
     bool IsReturned : 1;
     uint16_t Alignment;
+    uint64_t IndirectSize;
 
     ArgListEntry()
         : Val(nullptr), Ty(nullptr), IsSExt(false), IsZExt(false),
           IsInReg(false), IsSRet(false), IsNest(false), IsByVal(false),
-          IsInAlloca(false), IsReturned(false), Alignment(0) {}
+          IsInAlloca(false), IsReturned(false), Alignment(0),
+          IndirectSize(0) {}
 
     /// \brief Set CallLoweringInfo attribute flags based on a call instruction
     /// and called function attributes.

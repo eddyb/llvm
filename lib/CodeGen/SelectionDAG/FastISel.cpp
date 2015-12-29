@@ -89,6 +89,7 @@ void FastISel::ArgListEntry::setAttributes(ImmutableCallSite *CS,
   IsInAlloca = CS->paramHasAttr(AttrIdx, Attribute::InAlloca);
   IsReturned = CS->paramHasAttr(AttrIdx, Attribute::Returned);
   Alignment = CS->getParamAlignment(AttrIdx);
+  IndirectSize = CS->getDereferenceableBytes(AttrIdx);
 }
 
 /// Set the current block to which generated machine instructions will be
@@ -974,16 +975,8 @@ bool FastISel::lowerCallTo(CallLoweringInfo &CLI) {
       Flags.setByVal();
     }
     if (Arg.IsByVal || Arg.IsInAlloca) {
-      PointerType *Ty = cast<PointerType>(Arg.Ty);
-      Type *ElementTy = Ty->getPointerElementType();
-      unsigned FrameSize = DL.getTypeAllocSize(ElementTy);
-      // For ByVal, alignment should come from FE. BE will guess if this info is
-      // not there, but there are cases it cannot get right.
-      unsigned FrameAlign = Arg.Alignment;
-      if (!FrameAlign)
-        FrameAlign = TLI.getByValTypeAlignment(ElementTy, DL);
-      Flags.setByValSize(FrameSize);
-      Flags.setByValAlign(FrameAlign);
+      Flags.setByValSize(Arg.IndirectSize);
+      Flags.setByValAlign(Arg.Alignment);
     }
     if (Arg.IsNest)
       Flags.setNest();

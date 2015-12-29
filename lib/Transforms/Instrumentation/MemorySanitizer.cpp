@@ -1095,7 +1095,7 @@ struct MemorySanitizerVisitor : public InstVisitor<MemorySanitizerVisitor> {
         }
         unsigned Size =
             FArg.hasByValAttr()
-                ? DL.getTypeAllocSize(cast<PointerType>(FArg.getType())->getPointerElementType())
+                ? FArg.getDereferenceableBytes()
                 : DL.getTypeAllocSize(FArg.getType());
         if (A == &FArg) {
           bool Overflow = ArgOffset + Size > kParamTLSSize;

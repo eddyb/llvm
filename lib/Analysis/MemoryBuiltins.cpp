@@ -448,8 +448,7 @@ SizeOffsetType ObjectSizeOffsetVisitor::visitArgument(Argument &A) {
     ++ObjectVisitorArgument;
     return unknown();
   }
-  PointerType *PT = cast<PointerType>(A.getType());
-  APInt Size(IntTyBits, DL.getTypeAllocSize(PT->getPointerElementType()));
+  APInt Size(IntTyBits, A.getDereferenceableBytes());
   return std::make_pair(align(Size, A.getParamAlignment()), Zero);
 }
 

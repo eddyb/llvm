@@ -7101,11 +7101,12 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
   for (unsigned i = 0, e = Args.size(); i != e; ++i) {
     SmallVector<EVT, 4> ValueVTs;
     ComputeValueVTs(*this, DL, Args[i].Ty, ValueVTs);
-    Type *FinalType = Args[i].Ty;
-    if (Args[i].isByVal)
-      FinalType = cast<PointerType>(Args[i].Ty)->getPointerElementType();
-    bool NeedsRegBlock = functionArgumentNeedsConsecutiveRegisters(
-        FinalType, CLI.CallConv, CLI.IsVarArg);
+
+    bool NeedsRegBlock = false;
+    if (!Args[i].isByVal)
+      NeedsRegBlock = functionArgumentNeedsConsecutiveRegisters(
+          Args[i].Ty, CLI.CallConv, CLI.IsVarArg);
+
     for (unsigned Value = 0, NumValues = ValueVTs.size(); Value != NumValues;
          ++Value) {
       EVT VT = ValueVTs[Value];
@@ -7135,17 +7136,8 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
         Flags.setByVal();
       }
       if (Args[i].isByVal || Args[i].isInAlloca) {
-        PointerType *Ty = cast<PointerType>(Args[i].Ty);
-        Type *ElementTy = Ty->getPointerElementType();
-        Flags.setByValSize(DL.getTypeAllocSize(ElementTy));
-        // For ByVal, alignment should come from FE.  BE will guess if this
-        // info is not there but there are cases it cannot get right.
-        unsigned FrameAlign;
-        if (Args[i].Alignment)
-          FrameAlign = Args[i].Alignment;
-        else
-          FrameAlign = getByValTypeAlignment(ElementTy, DL);
-        Flags.setByValAlign(FrameAlign);
+        Flags.setByValSize(Args[i].IndirectSize);
+        Flags.setByValAlign(Args[i].Alignment);
       }
       if (Args[i].isNest)
         Flags.setNest();
@@ -7383,11 +7375,12 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
     ComputeValueVTs(*TLI, DAG.getDataLayout(), I->getType(), ValueVTs);
     bool isArgValueUsed = !I->use_empty();
     unsigned PartBase = 0;
-    Type *FinalType = I->getType();
-    if (F.getAttributes().hasAttribute(Idx, Attribute::ByVal))
-      FinalType = cast<PointerType>(FinalType)->getPointerElementType();
-    bool NeedsRegBlock = TLI->functionArgumentNeedsConsecutiveRegisters(
-        FinalType, F.getCallingConv(), F.isVarArg());
+
+    bool NeedsRegBlock = false;
+    if (!F.getAttributes().hasAttribute(Idx, Attribute::ByVal))
+      NeedsRegBlock = TLI->functionArgumentNeedsConsecutiveRegisters(
+        I->getType(), F.getCallingConv(), F.isVarArg());
+
     for (unsigned Value = 0, NumValues = ValueVTs.size();
          Value != NumValues; ++Value) {
       EVT VT = ValueVTs[Value];
@@ -7420,17 +7413,8 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
           Flags.setByVal();
       }
       if (Flags.isByVal() || Flags.isInAlloca()) {
-        PointerType *Ty = cast<PointerType>(I->getType());
-        Type *ElementTy = Ty->getPointerElementType();
-        Flags.setByValSize(DL.getTypeAllocSize(ElementTy));
-        // For ByVal, alignment should be passed from FE.  BE will guess if
-        // this info is not there but there are cases it cannot get right.
-        unsigned FrameAlign;
-        if (F.getParamAlignment(Idx))
-          FrameAlign = F.getParamAlignment(Idx);
-        else
-          FrameAlign = TLI->getByValTypeAlignment(ElementTy, DL);
-        Flags.setByValAlign(FrameAlign);
+        Flags.setByValSize(F.getDereferenceableBytes(Idx));
+        Flags.setByValAlign(F.getParamAlignment(Idx));
       }
       if (F.getAttributes().hasAttribute(Idx, Attribute::Nest))
         Flags.setNest();

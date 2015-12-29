@@ -1913,51 +1913,6 @@ EVT X86TargetLowering::getSetCCResultType(const DataLayout &DL, LLVMContext &,
   return VT.changeVectorElementTypeToInteger();
 }
 
-/// Helper for getByValTypeAlignment to determine
-/// the desired ByVal argument alignment.
-static void getMaxByValAlign(Type *Ty, unsigned &MaxAlign) {
-  if (MaxAlign == 16)
-    return;
-  if (VectorType *VTy = dyn_cast<VectorType>(Ty)) {
-    if (VTy->getBitWidth() == 128)
-      MaxAlign = 16;
-  } else if (ArrayType *ATy = dyn_cast<ArrayType>(Ty)) {
-    unsigned EltAlign = 0;
-    getMaxByValAlign(ATy->getElementType(), EltAlign);
-    if (EltAlign > MaxAlign)
-      MaxAlign = EltAlign;
-  } else if (StructType *STy = dyn_cast<StructType>(Ty)) {
-    for (auto *EltTy : STy->elements()) {
-      unsigned EltAlign = 0;
-      getMaxByValAlign(EltTy, EltAlign);
-      if (EltAlign > MaxAlign)
-        MaxAlign = EltAlign;
-      if (MaxAlign == 16)
-        break;
-    }
-  }
-}
-
-/// Return the desired alignment for ByVal aggregate
-/// function arguments in the caller parameter area. For X86, aggregates
-/// that contain SSE vectors are placed at 16-byte boundaries while the rest
-/// are at 4-byte boundaries.
-unsigned X86TargetLowering::getByValTypeAlignment(Type *Ty,
-                                                  const DataLayout &DL) const {
-  if (Subtarget->is64Bit()) {
-    // Max of 8 and alignment of type.
-    unsigned TyAlign = DL.getABITypeAlignment(Ty);
-    if (TyAlign > 8)
-      return TyAlign;
-    return 8;
-  }
-
-  unsigned Align = 4;
-  if (Subtarget->hasSSE1())
-    getMaxByValAlign(Ty, Align);
-  return Align;
-}
-
 /// Returns the target specific optimal type for load
 /// and store operations as a result of memset, memcpy, and memmove
 /// lowering. If DstAlign is zero that means it's safe to destination

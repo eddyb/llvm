@@ -746,11 +746,6 @@ public:
     return getValueType(DL, Ty, AllowUnknown).getSimpleVT();
   }
 
-  /// Return the desired alignment for ByVal or InAlloca aggregate function
-  /// arguments in the caller parameter area.  This is the actual alignment, not
-  /// its logarithm.
-  virtual unsigned getByValTypeAlignment(Type *Ty, const DataLayout &DL) const;
-
   /// Return the type of registers that this ValueType will eventually require.
   MVT getRegisterType(MVT VT) const {
     assert((unsigned)VT.SimpleTy < array_lengthof(RegisterTypeForVT));
@@ -2323,10 +2318,11 @@ public:
     bool isInAlloca : 1;
     bool isReturned : 1;
     uint16_t Alignment;
+    uint64_t IndirectSize;
 
     ArgListEntry() : isSExt(false), isZExt(false), isInReg(false),
       isSRet(false), isNest(false), isByVal(false), isInAlloca(false),
-      isReturned(false), Alignment(0) { }
+      isReturned(false), Alignment(0), IndirectSize(0) { }
 
     void setAttributes(ImmutableCallSite *CS, unsigned AttrIdx);
   };

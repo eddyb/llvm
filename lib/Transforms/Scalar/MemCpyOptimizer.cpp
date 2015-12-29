@@ -1183,8 +1183,7 @@ bool MemCpyOpt::processByValArgument(CallSite CS, unsigned ArgNo) {
   const DataLayout &DL = CS.getCaller()->getParent()->getDataLayout();
   // Find out what feeds this byval argument.
   Value *ByValArg = CS.getArgument(ArgNo);
-  Type *ByValTy = cast<PointerType>(ByValArg->getType())->getPointerElementType();
-  uint64_t ByValSize = DL.getTypeAllocSize(ByValTy);
+  uint64_t ByValSize = CS.getDereferenceableBytes(ArgNo);
   MemDepResult DepInfo = MD->getPointerDependencyFrom(
       MemoryLocation(ByValArg, ByValSize), true,
       CS.getInstruction()->getIterator(), CS.getInstruction()->getParent());

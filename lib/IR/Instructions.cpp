@@ -388,6 +388,30 @@ bool CallInst::dataOperandHasImpliedAttr(unsigned i,
   return bundleOperandHasAttr(i - 1, A);
 }
 
+unsigned CallInst::getParamAlignment(unsigned i) const {
+  if (unsigned Align = AttributeList.getParamAlignment(i))
+    return Align;
+  if (const Function *F = getCalledFunction())
+    return F->getAttributes().getParamAlignment(i);
+  return 0;
+}
+
+uint64_t CallInst::getDereferenceableBytes(unsigned i) const {
+  if (unsigned Bytes = AttributeList.getDereferenceableBytes(i))
+    return Bytes;
+  if (const Function *F = getCalledFunction())
+    return F->getAttributes().getDereferenceableBytes(i);
+  return 0;
+}
+
+uint64_t CallInst::getDereferenceableOrNullBytes(unsigned i) const {
+  if (unsigned Bytes = AttributeList.getDereferenceableOrNullBytes(i))
+    return Bytes;
+  if (const Function *F = getCalledFunction())
+    return F->getAttributes().getDereferenceableOrNullBytes(i);
+  return 0;
+}
+
 /// IsConstantOne - Return true only if val is constant int 1
 static bool IsConstantOne(Value *val) {
   assert(val && "IsConstantOne does not work with nullptr val");
@@ -650,6 +674,30 @@ bool InvokeInst::dataOperandHasImpliedAttr(unsigned i,
   assert(hasOperandBundles() && i >= (getBundleOperandsStartIndex() + 1) &&
          "Must be either an invoke argument or an operand bundle!");
   return bundleOperandHasAttr(i - 1, A);
+}
+
+unsigned InvokeInst::getParamAlignment(unsigned i) const {
+  if (unsigned Align = AttributeList.getParamAlignment(i))
+    return Align;
+  if (const Function *F = getCalledFunction())
+    return F->getAttributes().getParamAlignment(i);
+  return 0;
+}
+
+uint64_t InvokeInst::getDereferenceableBytes(unsigned i) const {
+  if (unsigned Bytes = AttributeList.getDereferenceableBytes(i))
+    return Bytes;
+  if (const Function *F = getCalledFunction())
+    return F->getAttributes().getDereferenceableBytes(i);
+  return 0;
+}
+
+uint64_t InvokeInst::getDereferenceableOrNullBytes(unsigned i) const {
+  if (unsigned Bytes = AttributeList.getDereferenceableOrNullBytes(i))
+    return Bytes;
+  if (const Function *F = getCalledFunction())
+    return F->getAttributes().getDereferenceableOrNullBytes(i);
+  return 0;
 }
 
 void InvokeInst::setAttributes(const AttributeSet &Attrs) {
