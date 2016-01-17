@@ -4089,7 +4089,7 @@ const SCEV *ScalarEvolution::createNodeForSelectOrPHI(Instruction *I,
 const SCEV *ScalarEvolution::createNodeForGEP(GEPOperator *GEP) {
   Value *Base = GEP->getOperand(0);
   // Don't attempt to analyze GEPs over unsized objects.
-  if (!Base->getType()->getPointerElementType()->isSized())
+  if (!GEP->getSourceElementType()->isSized())
     return getUnknown(GEP);
 
   SmallVector<const SCEV *, 4> IndexExprs;
