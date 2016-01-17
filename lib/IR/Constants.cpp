@@ -2330,12 +2330,13 @@ const char *ConstantExpr::getOpcodeName() const {
 }
 
 GetElementPtrConstantExpr::GetElementPtrConstantExpr(
-    Type *SrcElementTy, Constant *C, ArrayRef<Constant *> IdxList, Type *DestTy)
+    Type *SrcElementTy, Type *ResElementTy,
+    Constant *C, ArrayRef<Constant *> IdxList, Type *DestTy)
     : ConstantExpr(DestTy, Instruction::GetElementPtr,
                    OperandTraits<GetElementPtrConstantExpr>::op_end(this) -
                        (IdxList.size() + 1),
                    IdxList.size() + 1),
-      SrcElementTy(SrcElementTy) {
+      SrcElementTy(SrcElementTy), ResElementTy(ResElementTy) {
   Op<0>() = C;
   Use *OperandList = getOperandList();
   for (unsigned i = 0, E = IdxList.size(); i != E; ++i)
@@ -2344,6 +2345,10 @@ GetElementPtrConstantExpr::GetElementPtrConstantExpr(
 
 Type *GetElementPtrConstantExpr::getSourceElementType() const {
   return SrcElementTy;
+}
+
+Type *GetElementPtrConstantExpr::getResultElementType() const {
+  return ResElementTy;
 }
 
 //===----------------------------------------------------------------------===//
