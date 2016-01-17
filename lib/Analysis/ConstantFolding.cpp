@@ -683,9 +683,7 @@ static Constant *CastGEPIndices(Type *SrcTy, ArrayRef<Constant *> Ops,
   SmallVector<Constant*, 32> NewIdxs;
   for (unsigned i = 1, e = Ops.size(); i != e; ++i) {
     if ((i == 1 ||
-         !isa<StructType>(GetElementPtrInst::getIndexedType(
-             cast<PointerType>(Ops[0]->getType()->getScalarType())
-                 ->getElementType(),
+         !isa<StructType>(GetElementPtrInst::getIndexedType(SrcTy,
              Ops.slice(1, i - 1)))) &&
         Ops[i]->getType() != IntPtrTy) {
       Any = true;

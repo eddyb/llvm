@@ -3018,7 +3018,12 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
 
       Ty = StTy->getElementType(Field);
     } else {
-      Ty = cast<SequentialType>(Ty)->getElementType();
+      if (Ty->isPointerTy()) {
+        Ty = cast<GEPOperator>(&I)->getSourceElementType();
+      } else {
+        Ty = cast<SequentialType>(Ty)->getElementType();
+      }
+
       MVT PtrTy =
           DAG.getTargetLoweringInfo().getPointerTy(DAG.getDataLayout(), AS);
       unsigned PtrSize = PtrTy.getSizeInBits();
