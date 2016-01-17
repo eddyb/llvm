@@ -225,28 +225,25 @@ public:
 /// used behind the scenes to implement getelementpr constant exprs.
 class GetElementPtrConstantExpr : public ConstantExpr {
   Type *SrcElementTy;
+  Type *ResElementTy;
   void anchor() override;
-  GetElementPtrConstantExpr(Type *SrcElementTy, Constant *C,
-                            ArrayRef<Constant *> IdxList, Type *DestTy);
+  GetElementPtrConstantExpr(Type *SrcElementTy, Type *ResElementTy,
+                            Constant *C, ArrayRef<Constant *> IdxList,
+                            Type *DestTy);
 
 public:
-  static GetElementPtrConstantExpr *Create(Constant *C,
-                                           ArrayRef<Constant*> IdxList,
-                                           Type *DestTy,
-                                           unsigned Flags) {
-    return Create(
-        cast<PointerType>(C->getType()->getScalarType())->getElementType(), C,
-        IdxList, DestTy, Flags);
-  }
-  static GetElementPtrConstantExpr *Create(Type *SrcElementTy, Constant *C,
+  static GetElementPtrConstantExpr *Create(Type *SrcElementTy,
+                                           Type *ResElementTy, Constant *C,
                                            ArrayRef<Constant *> IdxList,
                                            Type *DestTy, unsigned Flags) {
     GetElementPtrConstantExpr *Result = new (IdxList.size() + 1)
-        GetElementPtrConstantExpr(SrcElementTy, C, IdxList, DestTy);
+        GetElementPtrConstantExpr(SrcElementTy, ResElementTy,
+                                  C, IdxList, DestTy);
     Result->SubclassOptionalData = Flags;
     return Result;
   }
   Type *getSourceElementType() const;
+  Type *getResultElementType() const;
   /// Transparently provide more efficient getOperand methods.
   DECLARE_TRANSPARENT_OPERAND_ACCESSORS(Value);
 
@@ -535,6 +532,7 @@ struct ConstantExprKeyType {
           ExplicitTy ? ExplicitTy
                      : cast<PointerType>(Ops[0]->getType()->getScalarType())
                            ->getElementType(),
+          cast<PointerType>(Ty->getScalarType())->getPointerElementType(),
           Ops[0], Ops.slice(1), Ty, SubclassOptionalData);
     case Instruction::ICmp:
       return new CompareConstantExpr(Ty, Instruction::ICmp, SubclassData,
