@@ -3871,9 +3871,14 @@ AllocaInst *SROA::rewritePartition(AllocaInst &AI, AllocaSlices &AS,
     // the alloca's alignment unconstrained.
     if (Alignment <= DL.getABITypeAlignment(SliceTy))
       Alignment = 0;
+
+    StringRef AIName = AI.getName();
+    size_t Offset = AIName.find(".sroa.");
     NewAI = new AllocaInst(
         SliceTy, nullptr, Alignment,
-        AI.getName() + ".sroa." + Twine(P.begin() - AS.begin()), &AI);
+        ((Offset != StringRef::npos) ? AIName.substr(0, Offset) : AIName) +
+            ".sroa." + Twine(P.begin() - AS.begin()),
+        &AI);
     ++NumNewAllocas;
   }
 
